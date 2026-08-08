@@ -44,7 +44,7 @@ sequenceDiagram
         else захвачен
             Ing->>AX: скачать PDF (переиспользовать, если на диске)
             AX-->>FS: {id}.pdf
-            Ing->>Ing: extract_text (PyMuPDF); <500 символов ⇒ fail
+            Ing->>Ing: extract_text (PyMuPDF) — меньше 500 символов ⇒ fail
             Ing->>PG: update_paper_pdf ⇒ text_ok
             Ing->>PG: save_chunks (DELETE старые + INSERT)
             loop каждый чанк WHERE embedding IS NULL
@@ -54,7 +54,7 @@ sequenceDiagram
             Ing->>PG: mark_paper_indexed ⇒ indexed
             Ing->>PG: pg_advisory_unlock (finally)
         end
-        Bot->>Gem: enrich_and_save (авто; сбой ≠ смена статуса)
+        Bot->>Gem: enrich_and_save (авто, сбой ≠ смена статуса)
         Bot-->>U: "[id] indexed ok + enriched"
     end
 ```

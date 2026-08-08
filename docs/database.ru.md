@@ -63,19 +63,17 @@ null-эмбеддингов → `indexed`; иначе → `failed` с сообщ
 | Файл | Эффект |
 |---|---|
 | [init_db.sql](../scripts/init_db.sql) | расширение `vector` + таблица `papers` + индексы |
-| [add_chunks.sql](../scripts/add_chunks.sql) | должен создавать `chunks` — **⚠ битый, см. ниже** |
+| [add_chunks.sql](../scripts/add_chunks.sql) | `CREATE TABLE chunks` + `idx_chunks_paper_id` |
 | [add_chunks_section.sql](../scripts/add_chunks_section.sql) | `ALTER TABLE chunks ADD COLUMN section` (идемпотентно) |
 | [chunks_fts.sql](../scripts/chunks_fts.sql) | `text_search` tsvector + GIN |
 | [embedding_halfvec_hnsw.sql](../scripts/embedding_halfvec_hnsw.sql) | `embedding → halfvec(3072)` + HNSW |
 | [backfill_ingest_lifecycle.sql](../scripts/backfill_ingest_lifecycle.sql) | классификация legacy `text_ok` |
 
-## ⚠ Known issue: `add_chunks.sql` битый
+## Поднятие с нуля
 
-[scripts/add_chunks.sql](../scripts/add_chunks.sql) **не выполним в текущем виде**: он начинается с
-`CREATE INDEX ... USING hnsw (embedding halfvec_cosine_ops); (` — заголовок `CREATE TABLE chunks (`
-отсутствует, заменён HNSW-индексом, оставляя орфанный список колонок, который является невалидным
-SQL (и HNSW-по-`halfvec` оператор к тому же шёл бы до конвертации в halfvec). **Живая таблица
-`chunks` соответствует этому списку колонок** и бот работает, значит таблица создавалась иначе — но
-закоммиченный скрипт её не пересоздаст. Нужен чистый скрипт пересборки (`CREATE TABLE chunks (...)`
-+ `idx_chunks_paper_id`, с FTS/halfvec/HNSW отдельными шагами) до того, как эту схему можно будет
-поднять с нуля.
+Файлы миграций выше выполняются по порядку на свежей БД. `add_chunks.sql` раньше был **битым** —
+заголовок `CREATE TABLE chunks (` был перезаписан на `CREATE INDEX ... USING hnsw (…); (`, оставляя
+орфанный список колонок (невалидный SQL) и HNSW-по-`halfvec` оператор, шедший до конвертации в
+halfvec. Он **пересобран** как обычный create таблицы (`embedding vector(3072)`), а full-text
+колонка и halfvec/HNSW-конвертация оставлены отдельными шагами, которыми они и должны быть. Живая
+таблица `chunks` уже соответствовала целевым колонкам, поэтому миграция данных не потребовалась.

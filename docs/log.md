@@ -2,6 +2,17 @@
 
 Chronological history for the `docs/` OKF bundle, newest first (OKF v0.2 reserved `log.md`).
 
+## 2026-08-08 — Tier-2 concepts + add_chunks.sql fix
+
+- **Added** the Tier-2 as-built concepts (EN + RU): [enrichment](enrichment.md),
+  [bot-commands](bot-commands.md), [configuration](configuration.md). The as-built concept +
+  diagram set is now complete.
+- **Fixed** the defect flagged earlier: [scripts/add_chunks.sql](../scripts/add_chunks.sql) was
+  rebuilt into a valid `CREATE TABLE chunks (...)` + `idx_chunks_paper_id` (the corrupted HNSW-over
+  header removed); [database.md](database.md) updated from "known issue" to a provisioning note.
+- **Updated** [index.md](index.md) (+ ru): all as-built concepts present; remaining work is
+  `plan/01`–`plan/05` per-file frontmatter and human `verified` promotion.
+
 ## 2026-08-08 — Tier-1 concepts + diagrams
 
 - **Added** the Tier-1 as-built concepts (EN + RU): [ingest-pipeline](ingest-pipeline.md),

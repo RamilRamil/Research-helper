@@ -62,19 +62,18 @@ embedding → `indexed`; otherwise → `failed` with a recovery message. Run onc
 | File | Effect |
 |---|---|
 | [init_db.sql](../scripts/init_db.sql) | `vector` extension + `papers` table + indexes |
-| [add_chunks.sql](../scripts/add_chunks.sql) | intended to create `chunks` — **⚠ broken, see below** |
+| [add_chunks.sql](../scripts/add_chunks.sql) | `CREATE TABLE chunks` + `idx_chunks_paper_id` |
 | [add_chunks_section.sql](../scripts/add_chunks_section.sql) | `ALTER TABLE chunks ADD COLUMN section` (idempotent) |
 | [chunks_fts.sql](../scripts/chunks_fts.sql) | `text_search` tsvector + GIN |
 | [embedding_halfvec_hnsw.sql](../scripts/embedding_halfvec_hnsw.sql) | `embedding → halfvec(3072)` + HNSW |
 | [backfill_ingest_lifecycle.sql](../scripts/backfill_ingest_lifecycle.sql) | classify legacy `text_ok` rows |
 
-## ⚠ Known issue: `add_chunks.sql` is corrupted
+## Provisioning from scratch
 
-[scripts/add_chunks.sql](../scripts/add_chunks.sql) is **not runnable as written**: it opens with a
-`CREATE INDEX ... USING hnsw (embedding halfvec_cosine_ops); (` — the `CREATE TABLE chunks (`
-header is missing, replaced by an HNSW index, leaving an orphan column list that is invalid SQL
-(and the HNSW-on-`halfvec` op would also predate the halfvec conversion). The **live `chunks` table
-matches the column list** and the bot works, so the table was created some other way — but the
-committed script cannot recreate it. A clean rebuild script (`CREATE TABLE chunks (...)` +
-`idx_chunks_paper_id`, with FTS/halfvec/HNSW as separate follow-ups) is needed before this schema
-can be provisioned from scratch.
+The migration files above run cleanly in order against a fresh database. `add_chunks.sql` previously
+shipped **corrupted** — the `CREATE TABLE chunks (` header had been overwritten by an
+`CREATE INDEX ... USING hnsw (…); (`, leaving an orphan column list that was invalid SQL (and an
+HNSW-on-`halfvec` op that predated the halfvec conversion). It has been **rebuilt** as a plain table
+create (`embedding vector(3072)`), with the full-text column and the halfvec/HNSW conversion kept as
+the separate follow-ups they require. The live `chunks` table already matched the intended columns,
+so no data migration was needed.

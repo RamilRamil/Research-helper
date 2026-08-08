@@ -44,7 +44,7 @@ sequenceDiagram
         else acquired
             Ing->>AX: download PDF (reuse if on disk)
             AX-->>FS: {id}.pdf
-            Ing->>Ing: extract_text (PyMuPDF); <500 chars ⇒ fail
+            Ing->>Ing: extract_text (PyMuPDF) — under 500 chars ⇒ fail
             Ing->>PG: update_paper_pdf ⇒ text_ok
             Ing->>PG: save_chunks (DELETE old + INSERT)
             loop each chunk WHERE embedding IS NULL
@@ -54,7 +54,7 @@ sequenceDiagram
             Ing->>PG: mark_paper_indexed ⇒ indexed
             Ing->>PG: pg_advisory_unlock (finally)
         end
-        Bot->>Gem: enrich_and_save (auto; failure ≠ status change)
+        Bot->>Gem: enrich_and_save (auto, failure ≠ status change)
         Bot-->>U: "[id] indexed ok + enriched"
     end
 ```

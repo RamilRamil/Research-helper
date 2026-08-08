@@ -45,8 +45,14 @@ vision, не как реальность. Док, который врёт про
   Postgres full-text + RRF), ready-only фильтрация, роутинг `/ask` (point vs synthesis),
   обоснованные ответы и map-reduce synthesis.
 - [database.ru.md](database.ru.md) · [🇬🇧](database.md) — схема как она есть в `scripts/*.sql`
-  (`papers`, `chunks`, `halfvec`, `text_search`, HNSW), backfill lifecycle и один битый скрипт
-  миграции.
+  (`papers`, `chunks`, `halfvec`, `text_search`, HNSW), backfill lifecycle и порядок файлов
+  миграций.
+- [enrichment.ru.md](enrichment.ru.md) · [🇬🇧](enrichment.md) — `summary_en` / `summary_ru` /
+  `tags` от Gemini, отвязанные от `ingest_status`, пока не используются в retrieval.
+- [bot-commands.ru.md](bot-commands.ru.md) · [🇬🇧](bot-commands.md) — операторская справка по
+  `/start /search /ask /list /enrich /reindex` и inline-кнопкам ingest.
+- [configuration.ru.md](configuration.ru.md) · [🇬🇧](configuration.md) — переменные окружения,
+  Compose-сервисы `db`/`app`, зависимости и оговорка про ручную инициализацию схемы.
 
 ## Диаграммы
 
@@ -55,14 +61,13 @@ vision, не как реальность. Док, который врёт про
   [paper-lifecycle](diagrams/paper-lifecycle.ru.md). (Карта модулей — в
   [system-overview.ru.md](system-overview.ru.md).)
 
-## Запланировано (ещё не написано)
+## Осталось
 
-Целевые концепты Tier-2; их пока нет, они перечислены, чтобы целевая форма бандла была явной.
+Набор as-built концептов + диаграмм завершён. Оставшаяся работа по бандлу:
 
-- `enrichment.md` — `summary_en` / `summary_ru` / `tags`, независимо от `ingest_status`.
-- `bot-commands.md` — операторская справка по `/start /search /ask /list /enrich /reindex` и
-  inline-кнопкам ingest.
-- `configuration.md` — переменные окружения, `docker-compose`, `.env`.
+- Per-file OKF frontmatter для `plan/01`–`plan/05` (пока помечен только
+  [plan/README.md](plan/README.md)).
+- Ревью человеком: перевести агентские черновики из `status: draft` в `verified` после проверки.
 
 ## Связанное (вне этого бандла)
 
