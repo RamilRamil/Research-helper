@@ -173,25 +173,31 @@ async def cmd_ask(message: Message) -> None:
         return
 
     question = parts[1].strip()
-    await message.answer(f"Thinking about: {question} ...")
 
+    from app.rag.router import route_question
     from app.db.search import hybrid_search
     from app.rag.answer import generate_answer
+    from app.rag.synthesis import synthesize_answer
+
+    mode = route_question(question)
+    await message.answer(f"Thinking ({mode}): {question} ...")
+
+    hits: list = []
+    answer: str | None = None
 
     try:
-        hits = await asyncio.to_thread(hybrid_search, question, 5)
+        if mode == "synthesis":
+            answer, hits = await asyncio.to_thread(synthesize_answer, question)
+        else:
+            hits = await asyncio.to_thread(hybrid_search, question, 5)
+            if not hits:
+                await message.answer("No relevant chunks found")
+                return
+            answer = await asyncio.to_thread(generate_answer, question, hits)
     except Exception as e:
-        await message.answer(f"Error searching chunks: {e}")
-        return
-
-    if not hits:
-        await message.answer("No relevant chunks found")
-        return
-
-    try:
-        answer = await asyncio.to_thread(generate_answer, question, hits)
-        await message.answer(answer[:4000])
-    except Exception as e:
+        if not hits:
+            await message.answer(f"Error: {e}")
+            return
         await message.answer(
             f"Answer generation failed: {e}\nShowing retrieved snippets instead."
         )
@@ -199,24 +205,31 @@ async def cmd_ask(message: Message) -> None:
         for i, h in enumerate(hits, 1):
             section = h.get("section") or "?"
             lines.append(
-                f"{i}. [{h['arxiv_id']}] ({section})\n"
-                f"{h['title']}\n"
-                f"{h['snippet']}..."
+                f"{i}. [{h.get('arxiv_id')}] ({section})\n"
+                f"{h.get('title')}\n"
+                f"{h.get('snippet')}..."
             )
         await message.answer("\n\n".join(lines)[:4000])
         return
 
+    if not answer:
+        await message.answer("No relevant chunks found")
+        return
+
+    await message.answer(answer[:4000])
+
     seen: set[str] = set()
     sources = []
     for h in hits:
-        aid = h["arxiv_id"]
-        if aid in seen:
+        aid = h.get("arxiv_id")
+        if not aid or aid in seen:
             continue
         seen.add(aid)
         sources.append(
-            f"- [{aid}] {h['title']}\n  https://arxiv.org/abs/{aid}"
+            f"- [{aid}] {h.get('title')}\n  https://arxiv.org/abs/{aid}"
         )
-    await message.answer("Sources:\n" + "\n".join(sources))
+    if sources:
+        await message.answer("Sources:\n" + "\n".join(sources))
 
 
 @dp.message(Command("list"))
@@ -316,7 +329,8 @@ async def cmd_reindex(message: Message) -> None:
     clean = _clean_id(raw_id)
 
     from app.db.papers import prepare_reindex, mark_paper_failed
-    from app.tools.ingest_paper import ingest_paper
+    from app.tools.ingest_paper import ingest_paper, IngestBusyError
+    from app.tools.enrich_paper import enrich_and_save
 
     try:
         prev = prepare_reindex(clean)
@@ -325,10 +339,6 @@ async def cmd_reindex(message: Message) -> None:
         return
 
     await message.answer(f"Reindexing {clean} (was {prev}) ...")
-    from app.tools.ingest_paper import ingest_paper, IngestBusyError
-
-    from app.tools.enrich_paper import enrich_and_save
-    from app.tools.ingest_paper import ingest_paper, IngestBusyError
 
     try:
         await asyncio.to_thread(ingest_paper, clean)

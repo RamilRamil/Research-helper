@@ -6,7 +6,7 @@ from google.genai import types
 
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-GEN_MODEL = "gemini-2.0-flash"
+GEN_MODEL = "gemini-flash-latest"
 
 _PROMPT = """You answer a research question using ONLY the context chunks below.
 

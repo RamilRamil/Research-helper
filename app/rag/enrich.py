@@ -9,7 +9,7 @@ from google.genai import types
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 # generative model (not embedding)
-GEN_MODEL = "gemini-2.0-flash"
+GEN_MODEL = "gemini-flash-latest"
 
 _PROMPT = """You enrich a research paper card for a personal library.
 

@@ -18,7 +18,7 @@ CREATE TABLE papers (
     tags            TEXT[],
 
     ingest_status   TEXT NOT NULL DEFAULT 'pending',
-    -- pending | pdf_ok | text_ok | indexed | failed
+    -- pending | text_ok | indexed | failed
     ingest_error    TEXT,
 
     found_by_query  TEXT,                       -- original user message

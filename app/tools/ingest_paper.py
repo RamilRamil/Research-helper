@@ -1,3 +1,4 @@
+import hashlib
 import os
 
 import psycopg
@@ -17,9 +18,10 @@ class IngestBusyError(RuntimeError):
 
 
 def _lock_key(arxiv_id: str) -> int:
-    # stable signed 64-bit-ish key from id string
+    # stable key from id string, process-independent (unlike builtin hash())
     clean = arxiv_id.split("v")[0]
-    return abs(hash(clean)) % (2**31)
+    digest = hashlib.sha256(clean.encode("utf-8")).digest()
+    return int.from_bytes(digest[:4], "big") % (2**31)
 
 
 def ingest_paper(arxiv_id: str) -> str:
