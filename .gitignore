@@ -25,3 +25,13 @@ data/papers_src/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Agent tooling configs
+.agents/
+.clinerules/
+.cursor/
+.opencode/
+.specify/
+.windsurf/
+AGENTS.md
+skills-lock.json
