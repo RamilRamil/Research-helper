@@ -1,4 +1,23 @@
+---
+type: Plan
+title: Research Agent — plan & architecture (vision)
+description: Forward-looking design and roadmap for the research assistant; not all of it is wired.
+tags: [plan, roadmap, vision, architecture]
+lang: en
+status: draft
+generated:
+  by: human:ramilmustafin
+  at: 2026-08-08T16:00:14+04:00
+---
+
 # Research Agent - Plan and Architecture
+
+> **⚠ Forward-looking vision, not as-built.** These docs describe the *target* design and roadmap.
+> Parts of it (LangGraph agent, FastAPI, Groq router, `research_sessions` / `chunk_feedback`
+> tables, JSONL backup, MCP) are **not wired today**. For what actually runs, see the as-built
+> OKF bundle at [../index.md](../index.md) — start with
+> [../system-overview.md](../system-overview.md). Per-file OKF frontmatter for `01`–`05` is still
+> pending.
 
 Personal research assistant: Telegram bot, arXiv search, local PDF library, RAG, and
 optional LangGraph orchestration.
