@@ -25,3 +25,4 @@ Active feature is in `.specify/feature.json`.
 | [016-supply-chain-pins](./016-supply-chain-pins/) | Verified. 117 exact pins; rebuild ok. |
 | [017-mcp-library-server](./017-mcp-library-server/) | Verified. Local read-only stdio: list/get/search. |
 | [018-mcp-http-auth](./018-mcp-http-auth/) | Verified. Streamable HTTP + Bearer `MCP_TOKEN` + per-IP rate limit; stdio intact. |
+| [019-telegram-roles](./019-telegram-roles/) | Verified. Multi Telegram allowlist `admin`/`reader`; legacy `ALLOWED_USER_ID`; MCP token unchanged. |

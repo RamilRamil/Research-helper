@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Bot commands — operator reference
-description: The Telegram command surface — /start /search /ask /list /enrich /reindex /communities, inline ingest buttons, and the whitelist gate.
+description: The Telegram command surface — /start /search /ask /list /enrich /reindex /communities, inline ingest buttons, and admin/reader role gate.
 tags: [telegram, commands, operator, reference]
 lang: en
 status: draft
@@ -17,19 +17,21 @@ sources:
 
 🇷🇺 [Русская версия](bot-commands.ru.md)
 
-Every handler first checks `is_allowed(user_id)` against `ALLOWED_USER_ID`; a non-whitelisted user
-gets "You are not allowed to use this bot" and nothing else runs.
+Every handler checks `app/bot/auth.py` against `ALLOWED_USERS` (or legacy `ALLOWED_USER_ID`).
+Unknown users get "You are not allowed to use this bot". Allowlisted users without the required
+role get "You are not allowed to use this command".
 
-| Command | What it does |
-|---|---|
-| `/start` | Access check + greeting. |
-| `/search <topic>` | arXiv search (last 365 days, up to 10), saves new rows as `pending`, replies with a list and per-paper ingest buttons. |
-| `/ask <question>` | Routed answer (point / synthesis / graph) with a cited **Sources** block. See [retrieval.md](retrieval.md). |
-| `/list <topic>` | `hybrid_search` over the indexed library, deduped to the top 10 papers (no generation). |
-| `/enrich <arxiv_id>` | (Re)generate the RU/EN summary + tags card. Requires the paper to be in the DB. See [enrichment.md](enrichment.md). |
-| `/reindex <arxiv_id>` | Recover incomplete ingest, or staged-rebuild an already `indexed` paper (old chunks stay searchable until swap). `/reindex indexed` rebuilds all indexed papers one by one. |
-| `/communities` | Rebuild Leiden communities on indexed papers (shared tag or category). Graph `/ask` expands to the same community. |
-| any other text | Echoed back. |
+| Command | Roles | What it does |
+|---|---|---|
+| `/start` | admin, reader | Access check + greeting. |
+| `/search <topic>` | admin | arXiv search (last 365 days, up to 10), saves new rows as `pending`, replies with a list and per-paper ingest buttons. |
+| `/ask <question>` | admin, reader | Routed answer (point / synthesis / graph) with a cited **Sources** block. See [retrieval.md](retrieval.md). |
+| `/list <topic>` | admin, reader | `hybrid_search` over the indexed library, deduped to the top 10 papers (no generation). |
+| `/enrich <arxiv_id>` | admin | (Re)generate the RU/EN summary + tags card. Requires the paper to be in the DB. See [enrichment.md](enrichment.md). |
+| `/reindex <arxiv_id>` | admin | Recover incomplete ingest, or staged-rebuild an already `indexed` paper (old chunks stay searchable until swap). `/reindex indexed` rebuilds all indexed papers one by one. |
+| `/communities` | admin | Rebuild Leiden communities on indexed papers (shared tag or category). Graph `/ask` expands to the same community. |
+| any other text | admin, reader | Echoed back. |
+| ingest callbacks (`add:` / `addall`) | admin | Inline buttons from `/search`. |
 
 ## Inline ingest buttons
 

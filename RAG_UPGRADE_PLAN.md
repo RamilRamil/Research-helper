@@ -43,7 +43,7 @@ entity-level GraphRAG, MCPD-чанкинг (вместо него `003` section-
 ## Specs
 
 Живой статус: [`specs/README.md`](specs/README.md). Active: `.specify/feature.json`
-(сейчас `018-mcp-http-auth`, verified).
+(сейчас `019-telegram-roles`).
 
 | Spec | Столп | Статус |
 |---|---|---|
@@ -65,7 +65,9 @@ entity-level GraphRAG, MCPD-чанкинг (вместо него `003` section-
 | `016` | supply-chain pins | verified; exact `==` install set |
 | `017` | MCP library server | verified: read-only stdio; list/get/search |
 | `018` | MCP HTTP auth | verified: Streamable HTTP + token + rate limit |
-| — | ACL | deferred |
+| `019` | Telegram roles | verified: multi-user `admin`/`reader`; legacy `ALLOWED_USER_ID`; MCP unchanged |
+| — | Per-user MCP tokens | deferred (`020+`) |
+| — | OAuth / paper ACL | deferred |
 
 Hybrid + RRF не отдельная фича: было as-built до `002`. `002` — rerank поверх hybrid.
 
@@ -79,6 +81,8 @@ Hybrid + RRF не отдельная фича: было as-built до `002`. `00
 4. ~~`016`~~ exact pins from live freeze.
 5. ~~`017`~~ local read-only MCP server.
 6. ~~`018`~~ MCP Streamable HTTP + shared Bearer + rate limit (TLS via reverse proxy).
+7. ~~`019`~~ Telegram multi-user roles (`admin`/`reader`).
+8. Later: per-user MCP tokens; OAuth/OIDC; paper-level ACL.
 
 ## Столпы — что закрыто чем
 
@@ -88,7 +92,7 @@ Hybrid + RRF не отдельная фича: было as-built до `002`. `00
 4. **GraphRAG** — paper graph `007`/`008` + Leiden `011`. Не entity graph.
 5. **Agentic** — `005` router, не многошаговый planner с отдельными tools.
 6. **CRAG / Self-RAG** — `004`. Web не делаем.
-7. **ACL** — отложено.
+7. **ACL** — `019` Telegram roles (shared library). Per-user MCP / OAuth / paper ACL later.
 8. **Eval** — traces `006`; метрики Ragas — `012`.
 
 ## Схема БД
@@ -105,4 +109,5 @@ active feature.json → только её tasks.md
   → следующая feature только по «делай»
 ```
 
-Локальный MCP (`017`) и token-gated HTTP (`018`) закрыты. ACL / OAuth — отложено.
+Локальный MCP (`017`), token-gated HTTP (`018`) и Telegram roles (`019`) закрыты.
+Next: per-user MCP tokens / OAuth — позже.

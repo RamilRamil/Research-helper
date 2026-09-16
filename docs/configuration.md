@@ -30,7 +30,10 @@ How the bot is configured and run. Loaded from `.env` via `python-dotenv`.
 | Variable | Required | Notes |
 |---|---|---|
 | `TELEGRAM_TOKEN` | yes | Bot token; `bot/main.py` reads it at import. |
-| `ALLOWED_USER_ID` | yes | Integer Telegram user id — the single whitelisted user. |
+| `ALLOWED_USERS` | yes* | Multi-user allowlist: `telegram_id:role` comma-separated. Roles: `admin`, `reader`. Preferred. |
+| `ALLOWED_USER_ID` | legacy* | Single Telegram user id treated as one `admin` when `ALLOWED_USERS` is unset/empty. |
+
+\* Bot fails closed unless `ALLOWED_USERS` or legacy `ALLOWED_USER_ID` is set.
 | `GEMINI_API_KEY` | yes | Used for query and document embeddings. |
 | `OPENROUTER_API_KEY` | yes | Used for DeepSeek V3.2 generation. |
 | `MCP_TOKEN` | yes for HTTP MCP | Shared bearer token for Streamable HTTP. |
@@ -57,7 +60,7 @@ Never commit `.env` — it is gitignored.
 ## Local development
 
 ```bash
-cp .env.example .env          # fill TELEGRAM_TOKEN, ALLOWED_USER_ID, GEMINI_API_KEY
+cp .env.example .env          # fill TELEGRAM_TOKEN, ALLOWED_USERS (or ALLOWED_USER_ID), GEMINI_API_KEY
 docker compose up -d db       # Postgres on localhost:5433
 python -m app.bot.main        # run the bot against the local DB
 ```

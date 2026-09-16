@@ -11,10 +11,12 @@ from aiogram.types import (
 )
 from dotenv import load_dotenv
 
+from app.bot.auth import ROLE_ADMIN, ROLE_READER, denied_message, load_users
+
 load_dotenv()
+load_users()
 
 TOKEN = os.environ["TELEGRAM_TOKEN"]
-ALLOWED = int(os.environ["ALLOWED_USER_ID"])
 
 bot = Bot(TOKEN)
 dp = Dispatcher()
@@ -23,26 +25,24 @@ dp = Dispatcher()
 _last_search: dict[int, list[str]] = {}
 
 
-def is_allowed(user_id: int) -> bool:
-    return user_id == ALLOWED
-
-
 def _clean_id(arxiv_id: str) -> str:
     return arxiv_id.split("v")[0]
 
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message) -> None:
-    if not is_allowed(message.from_user.id):
-        await message.answer("You are not allowed to use this bot")
+    deny = denied_message(message.from_user.id, ROLE_ADMIN, ROLE_READER)
+    if deny:
+        await message.answer(deny)
         return
     await message.answer("Hello! I'm your AI assistant. How can I help you today?")
 
 
 @dp.message(Command("search"))
 async def cmd_search(message: Message) -> None:
-    if not is_allowed(message.from_user.id):
-        await message.answer("You are not allowed to use this bot")
+    deny = denied_message(message.from_user.id, ROLE_ADMIN)
+    if deny:
+        await message.answer(deny)
         return
 
     parts = (message.text or "").split(maxsplit=1)
@@ -145,8 +145,10 @@ async def _ingest_one(arxiv_id: str) -> str:
 
 @dp.callback_query(F.data.startswith("add:"))
 async def on_add_one(callback: CallbackQuery) -> None:
-    if not callback.from_user or not is_allowed(callback.from_user.id):
-        await callback.answer("Not allowed", show_alert=True)
+    uid = callback.from_user.id if callback.from_user else None
+    deny = denied_message(uid, ROLE_ADMIN)
+    if deny:
+        await callback.answer(deny, show_alert=True)
         return
 
     clean = callback.data.split(":", 1)[1]
@@ -158,8 +160,10 @@ async def on_add_one(callback: CallbackQuery) -> None:
 
 @dp.callback_query(F.data == "addall")
 async def on_add_all(callback: CallbackQuery) -> None:
-    if not callback.from_user or not is_allowed(callback.from_user.id):
-        await callback.answer("Not allowed", show_alert=True)
+    uid = callback.from_user.id if callback.from_user else None
+    deny = denied_message(uid, ROLE_ADMIN)
+    if deny:
+        await callback.answer(deny, show_alert=True)
         return
 
     ids = _last_search.get(callback.from_user.id) or []
@@ -178,8 +182,9 @@ async def on_add_all(callback: CallbackQuery) -> None:
 
 @dp.message(Command("ask"))
 async def cmd_ask(message: Message) -> None:
-    if not is_allowed(message.from_user.id):
-        await message.answer("You are not allowed to use this bot")
+    deny = denied_message(message.from_user.id, ROLE_ADMIN, ROLE_READER)
+    if deny:
+        await message.answer(deny)
         return
 
     parts = (message.text or "").split(maxsplit=1)
@@ -269,8 +274,9 @@ async def cmd_ask(message: Message) -> None:
 
 @dp.message(Command("list"))
 async def cmd_list(message: Message) -> None:
-    if not is_allowed(message.from_user.id):
-        await message.answer("You are not allowed to use this bot")
+    deny = denied_message(message.from_user.id, ROLE_ADMIN, ROLE_READER)
+    if deny:
+        await message.answer(deny)
         return
 
     parts = (message.text or "").split(maxsplit=1)
@@ -312,8 +318,9 @@ async def cmd_list(message: Message) -> None:
 
 @dp.message(Command("enrich"))
 async def cmd_enrich(message: Message) -> None:
-    if not is_allowed(message.from_user.id):
-        await message.answer("You are not allowed to use this bot")
+    deny = denied_message(message.from_user.id, ROLE_ADMIN)
+    if deny:
+        await message.answer(deny)
         return
 
     parts = (message.text or "").split(maxsplit=1)
@@ -351,8 +358,9 @@ async def cmd_enrich(message: Message) -> None:
 
 @dp.message(Command("communities"))
 async def cmd_communities(message: Message) -> None:
-    if not is_allowed(message.from_user.id):
-        await message.answer("You are not allowed to use this bot")
+    deny = denied_message(message.from_user.id, ROLE_ADMIN)
+    if deny:
+        await message.answer(deny)
         return
 
     await message.answer("Rebuilding Leiden communities ...")
@@ -373,8 +381,9 @@ async def cmd_communities(message: Message) -> None:
 
 @dp.message(Command("reindex"))
 async def cmd_reindex(message: Message) -> None:
-    if not is_allowed(message.from_user.id):
-        await message.answer("You are not allowed to use this bot")
+    deny = denied_message(message.from_user.id, ROLE_ADMIN)
+    if deny:
+        await message.answer(deny)
         return
 
     parts = (message.text or "").split(maxsplit=1)
@@ -449,8 +458,9 @@ async def cmd_reindex(message: Message) -> None:
 
 @dp.message(F.text)
 async def any_text(message: Message) -> None:
-    if not is_allowed(message.from_user.id):
-        await message.answer("You are not allowed to use this bot")
+    deny = denied_message(message.from_user.id, ROLE_ADMIN, ROLE_READER)
+    if deny:
+        await message.answer(deny)
         return
     await message.answer("Echo: " + message.text)
 

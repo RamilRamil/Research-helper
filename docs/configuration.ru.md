@@ -30,7 +30,10 @@ sources:
 | Переменная | Обязательна | Заметки |
 |---|---|---|
 | `TELEGRAM_TOKEN` | да | Токен бота; `bot/main.py` читает его при импорте. |
-| `ALLOWED_USER_ID` | да | Целочисленный Telegram user id — единственный whitelisted пользователь. |
+| `ALLOWED_USERS` | да* | Multi-user allowlist: `telegram_id:role` через запятую. Роли: `admin`, `reader`. Предпочтительный вариант. |
+| `ALLOWED_USER_ID` | legacy* | Один Telegram user id как единственный `admin`, если `ALLOWED_USERS` не задан/пуст. |
+
+\* Бот fail closed, пока не задан `ALLOWED_USERS` или legacy `ALLOWED_USER_ID`.
 | `GEMINI_API_KEY` | да | Используется для query/document эмбеддингов. |
 | `OPENROUTER_API_KEY` | да | Используется для генерации DeepSeek V3.2. |
 | `MCP_TOKEN` | да для HTTP MCP | Shared bearer token для Streamable HTTP. |
@@ -59,7 +62,7 @@ sources:
 ## Локальная разработка
 
 ```bash
-cp .env.example .env          # заполнить TELEGRAM_TOKEN, ALLOWED_USER_ID, GEMINI_API_KEY
+cp .env.example .env          # заполнить TELEGRAM_TOKEN, ALLOWED_USERS (или ALLOWED_USER_ID), GEMINI_API_KEY
 docker compose up -d db       # Postgres на localhost:5433
 python -m app.bot.main        # запустить бота против локальной БД
 ```
