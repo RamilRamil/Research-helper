@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Команды бота — операторская справка
-description: Командная поверхность Telegram — /start /search /ask /list /enrich /reindex, inline-кнопки ingest и whitelist-гейт.
+description: Командная поверхность Telegram — /start /search /ask /list /enrich /reindex /communities, inline-кнопки ingest и whitelist-гейт.
 tags: [telegram, commands, operator, reference]
 lang: ru
 status: draft
@@ -23,11 +23,12 @@ sources:
 | Команда | Что делает |
 |---|---|
 | `/start` | Проверка доступа + приветствие. |
-| `/search <topic>` | Поиск на arXiv (последние 30 дней, до 10), сохраняет новые строки как `pending`, отвечает списком и per-paper кнопками ingest. |
-| `/ask <question>` | Роутинг ответа (point vs synthesis) с цитируемым блоком **Sources**. См. [retrieval.ru.md](retrieval.ru.md). |
+| `/search <topic>` | Поиск на arXiv (последние 365 дней, до 10), сохраняет новые строки как `pending`, отвечает списком и per-paper кнопками ingest. |
+| `/ask <question>` | Роутинг (point / synthesis / graph) с цитируемым блоком **Sources**. См. [retrieval.ru.md](retrieval.ru.md). |
 | `/list <topic>` | `hybrid_search` по проиндексированной библиотеке, дедуп до топ-10 статей (без генерации). |
 | `/enrich <arxiv_id>` | (Пере)генерировать карточку RU/EN резюме + теги. Требует, чтобы статья была в БД. См. [enrichment.ru.md](enrichment.ru.md). |
-| `/reindex <arxiv_id>` | Восстановить `pending` / `text_ok` / `failed` статью; отвергает `indexed`. См. [ingest-pipeline.ru.md](ingest-pipeline.ru.md). |
+| `/reindex <arxiv_id>` | Incomplete ingest или staged-rebuild уже `indexed` (старые чанки ищутся, пока не свап). `/reindex indexed` — все indexed по очереди. |
+| `/communities` | Пересобрать Leiden-сообщества indexed-статей (общий tag или категория). Graph `/ask` расширяет seed до того же community. |
 | любой другой текст | Эхо обратно. |
 
 ## Inline-кнопки ingest

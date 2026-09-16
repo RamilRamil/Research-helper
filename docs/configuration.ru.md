@@ -31,7 +31,13 @@ sources:
 |---|---|---|
 | `TELEGRAM_TOKEN` | да | Токен бота; `bot/main.py` читает его при импорте. |
 | `ALLOWED_USER_ID` | да | Целочисленный Telegram user id — единственный whitelisted пользователь. |
-| `GEMINI_API_KEY` | да | Используется и для эмбеддингов, и для генерации. |
+| `GEMINI_API_KEY` | да | Используется для query/document эмбеддингов. |
+| `OPENROUTER_API_KEY` | да | Используется для генерации DeepSeek V3.2. |
+| `MCP_TOKEN` | да для HTTP MCP | Shared bearer token для Streamable HTTP. |
+| `MCP_HTTP_HOST` | нет | По умолчанию `0.0.0.0`. |
+| `MCP_HTTP_PORT` | нет | По умолчанию `8000`. |
+| `MCP_RATE_LIMIT_PER_MIN` | нет | По умолчанию `60` запросов на IP в минуту. |
+| `MCP_RESOURCE_URL` | нет | Публичный URL MCP resource для auth metadata. |
 | `DATABASE_URL` | да | Postgres DSN. Локальный дефолт — `localhost:5433`; Compose переопределяет на внутренний `db:5432`. |
 | `PAPERS_DIR` | нет | Каталог хранения PDF; по умолчанию `data/papers`. |
 | `GROQ_API_KEY` | нет | Есть в `.env.example`, но **не используется** — Groq не подключён (см. [system-overview.ru.md](system-overview.ru.md)). |
@@ -59,7 +65,33 @@ python -m app.bot.main        # запустить бота против лок�
 ```
 
 Зависимости ([requirements.txt](../requirements.txt)): `python-dotenv`, `psycopg[binary]`,
-`aiogram`, `arxiv`, `pymupdf`, `httpx`, `google-genai`. Python 3.12.
+`aiogram`, `arxiv`, `pymupdf`, `httpx`, `google-genai` и `mcp`. Python 3.12.
+
+## Локальный MCP server
+
+Read-only MCP server отдаёт `list_papers`, `get_paper` и `search`.
+Write-tools нет.
+
+### Stdio
+
+```bash
+docker compose run --rm -T app python -m app.mcp_server
+```
+
+### Streamable HTTP (token + rate limit)
+
+Задай `MCP_TOKEN` в `.env`, затем:
+
+```bash
+docker compose up -d --build mcp
+```
+
+Endpoint: `http://127.0.0.1:8000/mcp`  
+Auth: `Authorization: Bearer <MCP_TOKEN>`  
+Rate limit: `MCP_RATE_LIMIT_PER_MIN` (по умолчанию 60/мин на IP).
+
+Для публичного интернета поставь TLS перед сервисом. Само приложение
+отдаёт cleartext HTTP.
 
 ## ⚠ Инициализация схемы ручная
 

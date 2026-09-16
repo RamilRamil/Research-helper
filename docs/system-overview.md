@@ -92,6 +92,9 @@ flowchart TB
   question routing, and card enrichment.
 - **`app/db/`** — persistence: paper lifecycle ([papers.py](../app/db/papers.py)), chunk write +
   embed ([chunks.py](../app/db/chunks.py)), and retrieval ([search.py](../app/db/search.py)).
+- **`app/mcp_server.py`** — read-only MCP tools (`list_papers`, `get_paper`,
+  `search`): stdio by default, Streamable HTTP with Bearer token + rate limit
+  via `--http` / Compose service `mcp`.
 
 ## Data flow
 
@@ -115,9 +118,11 @@ never leak into answers. On answer-generation failure the bot falls back to raw 
 
 ## Wired vs vision — read this before trusting a diagram
 
-What is **actually wired today**: aiogram polling bot · plain-Python functions · **Gemini only**
-(embeddings + generation) · PostgreSQL + pgvector (`papers`, `chunks`) · local PDF files · hybrid
-dense+FTS retrieval with RRF · heuristic `/ask` routing.
+What is **actually wired today**: aiogram polling bot · read-only MCP
+(stdio + token-gated Streamable HTTP) · plain-Python functions · Gemini
+embeddings · DeepSeek V3.2 generation through OpenRouter · PostgreSQL +
+pgvector (`papers`, `chunks`) · local PDF files · hybrid dense+FTS retrieval
+with RRF.
 
 What is **not built** (lives in [plan/](plan/README.md) as vision, despite appearing in the older
 plan diagrams):
@@ -126,7 +131,7 @@ plan diagrams):
 - **No Groq** — the "router" is a regex, not an LLM call; the only external model is Gemini.
 - **No `research_sessions` / `chunk_feedback` tables, no JSONL backup** — only `papers` and
   `chunks` exist.
-- **No MCP server** — a near-term direction (separate repo), not present here.
+- **No MCP OAuth / per-user ACL** — shared Bearer token only on HTTP; stdio is local.
 
 When the wiring changes, update this doc and add a `log.md` entry — a diagram that lies about what
 is connected is worse than no diagram.

@@ -53,7 +53,7 @@ EN/RU patterns like *compare*, *difference*, *vs*, *survey*, *сравни*, *ч
 route to `synthesis`; everything else is `point`.
 
 **point** → `hybrid_search(q, 5)` → `generate_answer` ([answer.py](../app/rag/answer.py)): a
-Gemini call (`gemini-flash-latest`, temperature 0.2, 3 retries) that must cite every claim as
+Gemini embed, DeepSeek V3.2 chat (`generate_content`, temperature 0.2) that must cite every claim as
 `[arxiv_id]`, may write `[id1][id2]`, must say when context is insufficient rather than invent, and
 answers in the question's language.
 

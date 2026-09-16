@@ -7,16 +7,19 @@ Telegram bot for searching arXiv, indexing papers in PostgreSQL with pgvector, a
 - Search recent arXiv papers by topic.
 - Download and index selected PDFs.
 - Generate embeddings and retrieve relevant paper fragments.
-- Answer questions with Gemini and list source papers.
+- Answer questions with DeepSeek V3.2 and list source papers.
 - Generate Russian and English paper summaries with tags.
 - Limit bot access to one Telegram user.
+- Expose indexed papers to local MCP hosts through three read-only tools.
 
 ## Stack
 
 - Python 3.12
 - aiogram
 - PostgreSQL 16 with pgvector
-- Google Gemini
+- Google Gemini embeddings
+- DeepSeek V3.2 generation through OpenRouter
+- MCP Python SDK
 - Docker Compose
 
 ## Setup

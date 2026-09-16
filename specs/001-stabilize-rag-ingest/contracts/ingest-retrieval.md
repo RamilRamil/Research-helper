@@ -34,6 +34,13 @@ Failure contract:
 - record `failed` plus safe diagnostic;
 - never make a failed reindex of an incomplete paper appear `indexed`.
 
+## `reindex_paper(arxiv_id) -> str`
+
+Must acquire the per-paper advisory lock **before** any lifecycle mutation.
+If lock is not acquired: raise busy, leave all rows unchanged.
+If paper is `indexed` or missing: raise `ValueError`, no chunk/PDF mutation.
+Otherwise: `prepare_reindex` then the same ingest body as `ingest_paper`.
+
 ## `ingest_paper(arxiv_id) -> str`
 
 Success contract:

@@ -94,6 +94,9 @@ flowchart TB
   роутинг вопросов и обогащение карточек.
 - **`app/db/`** — хранение: lifecycle статей ([papers.py](../app/db/papers.py)), запись + эмбеддинг
   чанков ([chunks.py](../app/db/chunks.py)) и поиск ([search.py](../app/db/search.py)).
+- **`app/mcp_server.py`** — read-only MCP tools (`list_papers`, `get_paper`,
+  `search`): stdio по умолчанию, Streamable HTTP с Bearer и rate limit через
+  `--http` / Compose-сервис `mcp`.
 
 ## Поток данных
 
@@ -118,9 +121,10 @@ Retrieval **ready-only**: `search.py` фильтрует `ingest_status = 'index
 
 ## Wired vs vision — прочитай прежде чем верить диаграмме
 
-Что **реально подключено сегодня**: aiogram polling-бот · обычные Python-функции · **только
-Gemini** (эмбеддинги + генерация) · PostgreSQL + pgvector (`papers`, `chunks`) · локальные PDF ·
-hybrid dense+FTS retrieval с RRF · эвристический роутинг `/ask`.
+Что **реально подключено сегодня**: aiogram polling-бот · read-only MCP
+(stdio + token-gated Streamable HTTP) · обычные Python-функции · Gemini
+embeddings · DeepSeek V3.2 generation через OpenRouter · PostgreSQL +
+pgvector (`papers`, `chunks`) · локальные PDF · hybrid dense+FTS retrieval с RRF.
 
 Что **не собрано** (живёт в [plan/](plan/README.md) как vision, хоть и появляется в старых
 плановых диаграммах):
@@ -129,7 +133,7 @@ hybrid dense+FTS retrieval с RRF · эвристический роутинг `
 - **Нет Groq** — «роутер» это regex, не LLM-вызов; единственная внешняя модель — Gemini.
 - **Нет таблиц `research_sessions` / `chunk_feedback`, нет JSONL-backup** — существуют только
   `papers` и `chunks`.
-- **Нет MCP-сервера** — ближайшее направление (отдельный репо), здесь его нет.
+- **Нет MCP OAuth / per-user ACL** — на HTTP только shared Bearer; stdio локальный.
 
 Когда проводка меняется — обнови этот док и добавь запись в `log.md`. Диаграмма, которая врёт про
 то, что связано, хуже, чем её отсутствие.

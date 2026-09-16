@@ -33,8 +33,8 @@ Telegram. Он намеренно **отвязан от индексации**: 
 
 ## Генерация
 
-`enrich_paper_card` ([enrich.py](../app/rag/enrich.py)) вызывает Gemini (`gemini-flash-latest`,
-temperature 0.2, `response_mime_type=application/json`, 3 ретрая с backoff). Промпт просит
+`enrich_paper_card` ([enrich.py](../app/rag/enrich.py)) вызывает DeepSeek V3.2
+(`generate_content`, temperature 0.2, `response_mime_type=application/json`). Промпт просит
 фактологичные `summary_en` (2–4 предложения), `summary_ru` и 3–8 коротких английских `tags`, без
 выдуманных результатов. Ответ парсится как JSON и валидируется: оба резюме непусты, `tags` — список,
 иначе ретрай / исключение.

@@ -52,7 +52,7 @@ Retrieval объединяет **dense** векторный поиск с **Post
 роутят в `synthesis`; всё остальное — `point`.
 
 **point** → `hybrid_search(q, 5)` → `generate_answer` ([answer.py](../app/rag/answer.py)): вызов
-Gemini (`gemini-flash-latest`, temperature 0.2, 3 ретрая), который обязан цитировать каждое
+DeepSeek V3.2 (`generate_content`, temperature 0.2), который обязан цитировать каждое
 утверждение как `[arxiv_id]`, может писать `[id1][id2]`, обязан сказать, когда контекста
 недостаточно, а не выдумывать, и отвечает на языке вопроса.
 

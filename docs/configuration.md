@@ -31,7 +31,13 @@ How the bot is configured and run. Loaded from `.env` via `python-dotenv`.
 |---|---|---|
 | `TELEGRAM_TOKEN` | yes | Bot token; `bot/main.py` reads it at import. |
 | `ALLOWED_USER_ID` | yes | Integer Telegram user id — the single whitelisted user. |
-| `GEMINI_API_KEY` | yes | Used for both embeddings and generation. |
+| `GEMINI_API_KEY` | yes | Used for query and document embeddings. |
+| `OPENROUTER_API_KEY` | yes | Used for DeepSeek V3.2 generation. |
+| `MCP_TOKEN` | yes for HTTP MCP | Shared bearer token for Streamable HTTP. |
+| `MCP_HTTP_HOST` | no | Default `0.0.0.0`. |
+| `MCP_HTTP_PORT` | no | Default `8000`. |
+| `MCP_RATE_LIMIT_PER_MIN` | no | Default `60` requests per client IP per minute. |
+| `MCP_RESOURCE_URL` | no | Public MCP resource URL for auth metadata. |
 | `DATABASE_URL` | yes | Postgres DSN. Local default targets `localhost:5433`; Compose overrides it to the internal `db:5432`. |
 | `PAPERS_DIR` | no | PDF storage dir; defaults to `data/papers`. |
 | `GROQ_API_KEY` | no | Present in `.env.example` but **not used** — no Groq is wired (see [system-overview.md](system-overview.md)). |
@@ -57,7 +63,33 @@ python -m app.bot.main        # run the bot against the local DB
 ```
 
 Dependencies ([requirements.txt](../requirements.txt)): `python-dotenv`, `psycopg[binary]`,
-`aiogram`, `arxiv`, `pymupdf`, `httpx`, `google-genai`. Python 3.12.
+`aiogram`, `arxiv`, `pymupdf`, `httpx`, `google-genai`, and `mcp`. Python 3.12.
+
+## Local MCP server
+
+The read-only MCP server exposes `list_papers`, `get_paper`, and `search`.
+No write tools.
+
+### Stdio
+
+```bash
+docker compose run --rm -T app python -m app.mcp_server
+```
+
+### Streamable HTTP (token + rate limit)
+
+Set `MCP_TOKEN` in `.env`, then:
+
+```bash
+docker compose up -d --build mcp
+```
+
+Endpoint: `http://127.0.0.1:8000/mcp`  
+Auth: `Authorization: Bearer <MCP_TOKEN>`  
+Rate limit: `MCP_RATE_LIMIT_PER_MIN` (default 60/min per client IP).
+
+Put TLS in front of this service for public internet. The app itself serves
+cleartext HTTP.
 
 ## ⚠ Schema init is manual
 

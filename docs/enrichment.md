@@ -33,8 +33,8 @@ card fields, never `ingest_status`.
 
 ## Generation
 
-`enrich_paper_card` ([enrich.py](../app/rag/enrich.py)) calls Gemini (`gemini-flash-latest`,
-temperature 0.2, `response_mime_type=application/json`, 3 retries with backoff). The prompt asks for
+`enrich_paper_card` ([enrich.py](../app/rag/enrich.py)) calls DeepSeek V3.2
+(`generate_content`, temperature 0.2, `response_mime_type=application/json`). The prompt asks for
 factual `summary_en` (2–4 sentences), `summary_ru`, and 3–8 short English `tags`, with no invented
 results. The response is JSON-parsed and validated: both summaries must be non-empty and `tags` must
 be a list, otherwise it retries / raises.

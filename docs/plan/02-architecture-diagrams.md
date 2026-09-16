@@ -1,113 +1,103 @@
 # Architecture Diagrams
 
-All diagrams use Mermaid. Render in GitHub, VS Code, or any Mermaid viewer.
+Mermaid. Render in GitHub, VS Code, or any Mermaid viewer.
 
 ---
 
-## 1. General layered architecture
+## 1. Knowledge Runtime (target)
 
 ```mermaid
 flowchart TB
-    subgraph Input["Perception and Input"]
-        UI[Web / API / Chat]
-        MM[Multimodal: text, image, audio, files]
-        Doc[Document parsers]
+    subgraph Channel["Channel"]
+        TG[Telegram whitelist]
     end
 
-    subgraph Core["Agent Core"]
-        LLM[LLM: Claude / GPT / Gemini / Groq]
-        Planner[Planner: LangGraph]
-        Tools[Tools via MCP or Python]
+    subgraph Plan["Planner / router — spec 005"]
+        P[Decompose question]
+        R[Pick retrieval tool]
     end
 
-    subgraph Memory["Memory and Knowledge"]
-        STM[Short-term: session / checkpoint]
-        LTM[Long-term: vector + optional graph]
-        KB[Knowledge base / RAG]
+    subgraph Retrieve["Retrieval"]
+        H[Hybrid dense + FTS + RRF — as-built]
+        RR[Rerank — spec 002]
+        G[Graph — spec 007 late]
     end
 
-    subgraph Control["Orchestration and Safety"]
-        Orch[Orchestrator: LangGraph]
-        Guard[Guardrails + policy]
-        Obs[Observability: Langfuse]
+    subgraph Guard["Corrective — spec 004"]
+        C[Retrieval quality gate]
+        S[Groundedness / Self-RAG]
     end
 
-    subgraph Learn["Feedback and Learning"]
-        Eval[Eval + human feedback]
-        RAGUp[RAG / prompt updates]
+    subgraph Eval["Eval — spec 006"]
+        M[Precision recall faithfulness relevancy]
+        T[Traces]
     end
 
-    Input --> Core
-    Core --> Memory
-    Core --> Tools
-    Core --> Control
-    Control --> Learn
-    Learn --> Memory
+    KB[(Postgres papers + chunks + PDF volume)]
+
+    TG --> P
+    P --> R
+    R --> H
+    H --> RR
+    R -.-> G
+    RR --> C
+    C --> S
+    S --> TG
+    H --> KB
+    RR --> KB
+    C --> H
+    S --> Eval
 ```
+
+Solid path today: Telegram -> heuristic route -> hybrid -> generate. Dashed: later specs.
 
 ---
 
-## 2. Research assistant stack (single agent, model routing)
+## 2. As-built stack
 
 ```mermaid
 flowchart LR
-    TG[Telegram] --> API[FastAPI + Bot]
-    API --> Graph[LangGraph Agent]
+    TG[Telegram] --> BOT[aiogram bot]
+    BOT --> ARX[arxiv search]
+    BOT --> ING[ingest PDF extract chunk embed]
+    BOT --> ASK["/ask router"]
 
-    Graph --> R1[Router: Groq Llama - free]
-    Graph --> R2[Research: Gemini Flash - free]
-    Graph --> R3[Synthesis: Gemini Pro - free]
-    Graph --> R4[Embeddings: Gemini - free]
+    ASK --> HY[hybrid_search]
+    ASK --> ANS[generate_answer / synthesize_answer]
 
-    Graph --> Tools[Tools]
-    Tools --> Arxiv[arXiv API]
-    Tools --> PDF[PDF download + PyMuPDF]
-    Tools --> KB[RAG: pgvector]
-    Tools --> Store[Save to KB]
-
-    KB --> DB[(PostgreSQL Supabase / Docker)]
-    Graph --> Mem[Session memory SQLite]
-    DB --> BK[Local JSONL backup]
-    PDF --> Vol[PDF Docker volume]
+    HY --> PG[(PostgreSQL pgvector)]
+    ING --> PG
+    ING --> VOL[data/papers PDF]
+    ANS --> GEM[Gemini]
+    HY --> GEM
 ```
+
+No FastAPI, no LangGraph, no Groq router in the running path.
 
 ---
 
-## 3. Typical user scenario (sequence)
+## 3. Ask path (today vs target)
 
 ```mermaid
 sequenceDiagram
-    participant U as User Telegram
-    participant B as Bot + LangGraph
-    participant A as arXiv API
+    participant U as User
+    participant B as Bot
+    participant RT as Router heuristic
+    participant H as Hybrid RRF
     participant L as Gemini
-    participant DB as Supabase pgvector
-    participant BK as Local backup
-    participant FS as PDF volume
 
-    U->>B: find papers last month on MEV in web3
-    B->>B: parse intent + date range + topic
-    B->>A: search query + submittedDate filter
-    A-->>B: papers list
-    B->>DB: dedupe by arxiv_id
-    loop new papers only
-        B->>A: download PDF
-        B->>FS: save PDF file
-        B->>B: extract text + chunk
-        B->>L: embed each chunk
-        B->>DB: insert paper + chunks + vectors
+    U->>B: /ask question
+    B->>RT: point or synthesis
+    alt point
+        RT->>H: hybrid_search
+        H->>L: generate_answer with citations
+    else synthesis
+        RT->>H: per-subquestion retrieve
+        H->>L: synthesize_answer with citations
     end
-    opt paper enrichment phase
-        B->>L: summarize indexed paper
-        B->>DB: save summaries and tags
-    end
-    B->>BK: async export delta
-    B-->>U: Saved N papers with summaries
+    L-->>U: answer + sources
 
-    U->>B: summary on MEV
-    B->>DB: semantic search + filters
-    B->>L: synthesize with citations
-    B-->>U: executive summary + arxiv_ids
+    Note over H,L: Later: rerank then CRAG then Self-RAG
 ```
 
 ---
@@ -118,23 +108,22 @@ sequenceDiagram
 flowchart TD
     Q[User query] --> P[Parse topic + dates]
     P --> S[arXiv search]
-    S --> D{Paper lifecycle state}
+    S --> D{Paper lifecycle}
     D -->|new| DL[Download PDF]
-    D -->|indexed| Skip[Skip without mutation]
-    D -->|pending_text_ok_failed| Manual[Owner runs reindex]
+    D -->|indexed| Skip[Skip no mutation]
+    D -->|pending text_ok failed| Manual[Owner /reindex]
     Manual --> DL
     DL --> FS[Local PDF storage]
-    DL --> EX[Extract text PyMuPDF]
+    DL --> EX[Extract PyMuPDF]
     EX --> TextOk[text_ok]
-    TextOk --> CH[Chunk text]
-    CH --> EM[Embed each chunk]
+    TextOk --> CH[Section window chunk]
+    CH --> EM[Embed]
     EM --> DB2[(chunks + vectors)]
     DB2 --> Indexed[indexed]
-    DL --> Failed[failed with safe error]
+    DL --> Failed[failed keep PDF]
     EX --> Failed
     CH --> Failed
     EM --> Failed
-    DB2 --> BK
 ```
 
 ---
@@ -154,106 +143,61 @@ stateDiagram-v2
 ```
 
 `indexed` is terminal for normal search. Replacing an indexed representation needs a
-future staged-index design.
+future staged-index design (own spec). Semantic rechunk (`003`) is that class of change.
 
 ---
 
-## 6. LangGraph state machine (single agent, future phase)
-
-```mermaid
-stateDiagram-v2
-    [*] --> Router
-    Router --> SearchIngest: intent=find_papers
-    Router --> RetrieveList: intent=list_all
-    Router --> RetrieveSummary: intent=topic_summary
-    Router --> Clarify: intent=unclear
-
-    SearchIngest --> ParseQuery
-    ParseQuery --> TranslateQuery
-    TranslateQuery --> ArxivSearch
-    ArxivSearch --> IngestPapers
-    IngestPapers --> Respond
-
-    RetrieveList --> KBFilter
-    RetrieveSummary --> KBSearch
-    KBSearch --> Synthesize
-    KBFilter --> Respond
-    Synthesize --> Respond
-    Clarify --> Respond
-    Respond --> [*]
-```
-
----
-
-## 7. Memory layers
+## 6. Memory layers
 
 ```mermaid
 flowchart TB
-    subgraph Session["Short-term (per chat thread)"]
-        CP[LangGraph SQLite checkpointer]
-        CTX[Current research context]
+    subgraph Session["Short-term"]
+        CTX[Current Telegram turn]
     end
 
-    subgraph KB["Long-term knowledge base"]
+    subgraph KB["Long-term"]
         PAPERS[papers metadata + summaries]
-        CHUNKS[chunks + embeddings]
+        CHUNKS[chunks + halfvec + tsvector]
         PDFS[PDF files on volume]
     end
 
-    subgraph Backup["Duplication"]
-        JSONL[JSONL delta export]
-        MANIFEST[daily manifest]
-    end
-
     Session --> KB
-    KB --> Backup
 ```
+
+JSONL backup and LangGraph checkpointer are not wired. Do not draw them as current.
 
 ---
 
-## 8. Infrastructure deployment
+## 7. Infrastructure
 
 ```mermaid
 flowchart LR
-    subgraph Local["Docker Compose 24/7"]
-        APP[app: bot + agent]
+    subgraph Local["Docker Compose"]
+        APP[app: bot]
         PG[(postgres pgvector)]
         VOL[data/papers]
-        BKP[data/backups]
     end
 
-    subgraph Cloud["Free cloud APIs"]
-        GEM[Gemini API]
-        GRQ[Groq API]
-        SUP[Supabase optional remote PG]
-    end
-
-    subgraph Batch["Colab / Kaggle optional"]
-        NB[reindex notebook]
+    subgraph Cloud["APIs"]
+        GEM[Gemini]
+        ARX[arXiv]
     end
 
     APP --> PG
     APP --> VOL
-    APP --> BKP
     APP --> GEM
-    APP --> GRQ
-    PG -.-> SUP
-    NB -.-> PG
+    APP --> ARX
 ```
 
 ---
 
-## 9. Summary generation strategy
+## 8. Spec Kit vs this folder
 
 ```mermaid
 flowchart LR
-    Q[Topic query] --> E[Embed query]
-    E --> VS[Vector search top chunks]
-    VS --> G[Group by paper_id]
-    G --> C[Top 3-5 chunks per paper]
-    C --> S[Add paper summaries]
-    S --> SYN[Gemini synthesis]
-    SYN --> OUT[Report with arxiv_id citations]
+    VIS[docs/plan + RAG_UPGRADE_PLAN] -->|intent only| SP[specs/NNN]
+    SP --> SPEC[spec.md]
+    SPEC --> PLAN[plan.md]
+    PLAN --> TASKS[tasks.md]
+    TASKS --> CODE[app/]
 ```
-
-Recommended for MVP: summaries + top chunks per paper (not full text in one prompt).

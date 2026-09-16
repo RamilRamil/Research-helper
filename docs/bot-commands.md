@@ -1,7 +1,7 @@
 ---
 type: Reference
 title: Bot commands — operator reference
-description: The Telegram command surface — /start /search /ask /list /enrich /reindex, inline ingest buttons, and the whitelist gate.
+description: The Telegram command surface — /start /search /ask /list /enrich /reindex /communities, inline ingest buttons, and the whitelist gate.
 tags: [telegram, commands, operator, reference]
 lang: en
 status: draft
@@ -23,11 +23,12 @@ gets "You are not allowed to use this bot" and nothing else runs.
 | Command | What it does |
 |---|---|
 | `/start` | Access check + greeting. |
-| `/search <topic>` | arXiv search (last 30 days, up to 10), saves new rows as `pending`, replies with a list and per-paper ingest buttons. |
-| `/ask <question>` | Routed answer (point vs synthesis) with a cited **Sources** block. See [retrieval.md](retrieval.md). |
+| `/search <topic>` | arXiv search (last 365 days, up to 10), saves new rows as `pending`, replies with a list and per-paper ingest buttons. |
+| `/ask <question>` | Routed answer (point / synthesis / graph) with a cited **Sources** block. See [retrieval.md](retrieval.md). |
 | `/list <topic>` | `hybrid_search` over the indexed library, deduped to the top 10 papers (no generation). |
 | `/enrich <arxiv_id>` | (Re)generate the RU/EN summary + tags card. Requires the paper to be in the DB. See [enrichment.md](enrichment.md). |
-| `/reindex <arxiv_id>` | Recover a `pending` / `text_ok` / `failed` paper; rejects `indexed`. See [ingest-pipeline.md](ingest-pipeline.md). |
+| `/reindex <arxiv_id>` | Recover incomplete ingest, or staged-rebuild an already `indexed` paper (old chunks stay searchable until swap). `/reindex indexed` rebuilds all indexed papers one by one. |
+| `/communities` | Rebuild Leiden communities on indexed papers (shared tag or category). Graph `/ask` expands to the same community. |
 | any other text | Echoed back. |
 
 ## Inline ingest buttons
