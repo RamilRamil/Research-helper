@@ -1,5 +1,10 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
+CREATE TABLE communities (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    summary_en  TEXT NOT NULL
+);
+
 CREATE TABLE papers (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     arxiv_id        TEXT UNIQUE NOT NULL,       -- e.g. "2406.01234"
@@ -20,6 +25,8 @@ CREATE TABLE papers (
     ingest_status   TEXT NOT NULL DEFAULT 'pending',
     -- pending | text_ok | indexed | failed
     ingest_error    TEXT,
+    chunk_gen       INTEGER NOT NULL DEFAULT 0,
+    community_id    UUID REFERENCES communities(id),
 
     found_by_query  TEXT,                       -- original user message
     search_query    TEXT,                       -- normalized arXiv query
@@ -30,3 +37,4 @@ CREATE TABLE papers (
 CREATE INDEX idx_papers_published_at ON papers (published_at DESC);
 CREATE INDEX idx_papers_tags ON papers USING GIN (tags);
 CREATE INDEX idx_papers_ingest_status ON papers (ingest_status);
+CREATE INDEX idx_papers_community_id ON papers (community_id);

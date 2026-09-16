@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     embedding       vector(3072),
     created_at      TIMESTAMPTZ DEFAULT now(),
     section         TEXT,
-    UNIQUE (paper_id, chunk_index)
+    chunk_gen       INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (paper_id, chunk_gen, chunk_index)
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunks_paper_id ON chunks(paper_id);

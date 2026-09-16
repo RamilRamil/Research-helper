@@ -56,19 +56,29 @@ async def cmd_search(message: Message) -> None:
     from app.tools.arxiv_search import build_query, search_papers
     from app.db.papers import save_paper, get_paper_status
 
-    papers = search_papers(topic, days=30, max_results=10)
+    papers = search_papers(topic, days=365, max_results=10)
     if not papers:
         await message.answer("No papers found")
         return
 
     search_query = build_query(topic)
     new_count = 0
+    skipped_indexed = 0
+    incomplete_count = 0
     ids: list[str] = []
 
     for paper in papers:
-        if save_paper(paper, topic, search_query):
+        inserted = save_paper(paper, topic, search_query)
+        clean = _clean_id(paper["arxiv_id"])
+        ids.append(clean)
+        if inserted:
             new_count += 1
-        ids.append(_clean_id(paper["arxiv_id"]))
+            continue
+        status = get_paper_status(clean)
+        if status == "indexed":
+            skipped_indexed += 1
+        else:
+            incomplete_count += 1
 
     _last_search[message.from_user.id] = ids
 
@@ -95,8 +105,9 @@ async def cmd_search(message: Message) -> None:
 
     footer = (
         f"\n\nSaved metadata: {new_count} new, "
-        f"{len(papers) - new_count} already in DB\n"
-        f"Pick papers to ingest (PDF + embed)."
+        f"{skipped_indexed} skipped indexed, "
+        f"{incomplete_count} incomplete (use /reindex)\n"
+        f"Pick pending papers to ingest (PDF + embed)."
     )
     await message.answer("\n\n".join(lines) + footer, reply_markup=keyboard)
 
@@ -108,8 +119,12 @@ async def _ingest_one(arxiv_id: str) -> str:
 
     clean = _clean_id(arxiv_id)
     status = get_paper_status(clean)
+    if status is None:
+        return f"[{clean}] not in database"
     if status == "indexed":
         return f"[{clean}] skipped (already indexed)"
+    if status in ("text_ok", "failed"):
+        return f"[{clean}] incomplete ({status}); use /reindex {clean}"
 
     try:
         await asyncio.to_thread(ingest_paper, clean)
@@ -174,62 +189,82 @@ async def cmd_ask(message: Message) -> None:
 
     question = parts[1].strip()
 
-    from app.rag.router import route_question
-    from app.db.search import hybrid_search
-    from app.rag.answer import generate_answer
-    from app.rag.synthesis import synthesize_answer
+    from app.rag.ask import run_ask
+    from app.rag.trace import log_ask
 
-    mode = route_question(question)
-    await message.answer(f"Thinking ({mode}): {question} ...")
-
-    hits: list = []
-    answer: str | None = None
+    rec = await asyncio.to_thread(run_ask, question)
+    hits = rec.get("hits") or []
+    answer = rec.get("answer")
 
     try:
-        if mode == "synthesis":
-            answer, hits = await asyncio.to_thread(synthesize_answer, question)
-        else:
-            hits = await asyncio.to_thread(hybrid_search, question, 5)
+        await message.answer(f"Thinking ({rec.get('route') or '?'}): {question} ...")
+
+        if rec["outcome"] == "error":
+            rec["n_hits"] = len(hits)
             if not hits:
-                await message.answer("No relevant chunks found")
+                await message.answer(f"Error: {rec.get('error') or 'unknown'}")
                 return
-            answer = await asyncio.to_thread(generate_answer, question, hits)
-    except Exception as e:
-        if not hits:
-            await message.answer(f"Error: {e}")
-            return
-        await message.answer(
-            f"Answer generation failed: {e}\nShowing retrieved snippets instead."
-        )
-        lines = []
-        for i, h in enumerate(hits, 1):
-            section = h.get("section") or "?"
-            lines.append(
-                f"{i}. [{h.get('arxiv_id')}] ({section})\n"
-                f"{h.get('title')}\n"
-                f"{h.get('snippet')}..."
+            await message.answer(
+                f"Answer generation failed: {rec.get('error')}\n"
+                "Showing retrieved snippets instead."
             )
-        await message.answer("\n\n".join(lines)[:4000])
+            lines = []
+            for i, h in enumerate(hits, 1):
+                section = h.get("section") or "?"
+                lines.append(
+                    f"{i}. [{h.get('arxiv_id')}] ({section})\n"
+                    f"{h.get('title')}\n"
+                    f"{h.get('snippet')}..."
+                )
+            await message.answer("\n\n".join(lines)[:4000])
+            return
+
+        if rec["outcome"] == "refuse_support":
+            await message.answer(
+                rec.get("answer") or "Indexed library cannot support this question."
+            )
+            return
+
+        if rec["outcome"] == "refuse_grounded":
+            await message.answer("Answer failed groundedness check.")
+            return
+
+        if not answer:
+            rec["outcome"] = "refuse_support"
+            await message.answer("No relevant chunks found")
+            return
+
+        await message.answer(str(answer)[:4000])
+
+        seen: set[str] = set()
+        sources = []
+        for h in hits:
+            aid = h.get("arxiv_id")
+            if not aid or aid in seen:
+                continue
+            seen.add(aid)
+            sources.append(
+                f"- [{aid}] {h.get('title')}\n  https://arxiv.org/abs/{aid}"
+            )
+        if sources:
+            await message.answer("Sources:\n" + "\n".join(sources))
+    except Exception as e:
+        rec["outcome"] = "error"
+        rec["error"] = str(e)[:300]
+        rec["n_hits"] = len(hits)
+        await message.answer(f"Error: {e}")
         return
-
-    if not answer:
-        await message.answer("No relevant chunks found")
-        return
-
-    await message.answer(answer[:4000])
-
-    seen: set[str] = set()
-    sources = []
-    for h in hits:
-        aid = h.get("arxiv_id")
-        if not aid or aid in seen:
-            continue
-        seen.add(aid)
-        sources.append(
-            f"- [{aid}] {h.get('title')}\n  https://arxiv.org/abs/{aid}"
-        )
-    if sources:
-        await message.answer("Sources:\n" + "\n".join(sources))
+    finally:
+        log_row = {
+            "question": rec.get("question"),
+            "route": rec.get("route"),
+            "tool": rec.get("tool"),
+            "outcome": rec.get("outcome"),
+            "n_hits": rec.get("n_hits"),
+            "arxiv_ids": rec.get("arxiv_ids"),
+            "error": rec.get("error"),
+        }
+        log_ask(log_row)
 
 
 @dp.message(Command("list"))
@@ -314,6 +349,28 @@ async def cmd_enrich(message: Message) -> None:
     )
 
 
+@dp.message(Command("communities"))
+async def cmd_communities(message: Message) -> None:
+    if not is_allowed(message.from_user.id):
+        await message.answer("You are not allowed to use this bot")
+        return
+
+    await message.answer("Rebuilding Leiden communities ...")
+    from app.rag.communities import rebuild_communities
+
+    try:
+        stats = await asyncio.to_thread(rebuild_communities)
+    except Exception as e:
+        await message.answer(f"Community rebuild failed: {e}")
+        return
+
+    sizes = ", ".join(str(n) for n in stats["sizes"]) or "none"
+    await message.answer(
+        f"Communities rebuilt: {stats['n_communities']} groups, "
+        f"{stats['n_papers']} indexed papers. Sizes: {sizes}"
+    )
+
+
 @dp.message(Command("reindex"))
 async def cmd_reindex(message: Message) -> None:
     if not is_allowed(message.from_user.id):
@@ -322,39 +379,70 @@ async def cmd_reindex(message: Message) -> None:
 
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2 or not parts[1].strip():
-        await message.answer("Usage: /reindex <arxiv_id>")
+        await message.answer("Usage: /reindex <arxiv_id> or /reindex indexed")
         return
 
     raw_id = parts[1].strip()
-    clean = _clean_id(raw_id)
+    if raw_id.lower() == "indexed":
+        from app.db.papers import list_indexed_arxiv_ids, note_indexed_rebuild_error
+        from app.tools.ingest_paper import reindex_paper, IngestBusyError
+        from app.tools.enrich_paper import enrich_and_save
 
-    from app.db.papers import prepare_reindex, mark_paper_failed
-    from app.tools.ingest_paper import ingest_paper, IngestBusyError
-    from app.tools.enrich_paper import enrich_and_save
-
-    try:
-        prev = prepare_reindex(clean)
-    except ValueError as e:
-        await message.answer(str(e))
+        ids = list_indexed_arxiv_ids()
+        if not ids:
+            await message.answer("No indexed papers")
+            return
+        await message.answer(f"Reindexing {len(ids)} indexed papers ...")
+        for clean in ids:
+            try:
+                await asyncio.to_thread(reindex_paper, clean)
+            except IngestBusyError as e:
+                await message.answer(f"[{clean}] busy: {e}")
+                continue
+            except Exception as e:
+                note_indexed_rebuild_error(clean, str(e))
+                await message.answer(f"[{clean}] rebuild failed: {e}")
+                continue
+            try:
+                await asyncio.to_thread(enrich_and_save, clean)
+                await message.answer(f"[{clean}] rebuilt ok + enriched")
+            except Exception as e:
+                await message.answer(f"[{clean}] rebuilt ok; enrich failed: {e}")
         return
 
-    await message.answer(f"Reindexing {clean} (was {prev}) ...")
+    clean = _clean_id(raw_id)
 
+    from app.db.papers import get_paper_status, mark_paper_failed, note_indexed_rebuild_error
+    from app.tools.ingest_paper import reindex_paper, IngestBusyError
+    from app.tools.enrich_paper import enrich_and_save
+
+    await message.answer(f"Reindexing {clean} ...")
+
+    was_indexed = get_paper_status(clean) == "indexed"
     try:
-        await asyncio.to_thread(ingest_paper, clean)
+        await asyncio.to_thread(reindex_paper, clean)
     except IngestBusyError as e:
         await message.answer(f"[{clean}] busy: {e}")
         return
+    except ValueError as e:
+        await message.answer(str(e))
+        return
     except Exception as e:
-        mark_paper_failed(clean, str(e))
-        await message.answer(f"[{clean}] failed: {e}")
+        if was_indexed:
+            note_indexed_rebuild_error(clean, str(e))
+            await message.answer(f"[{clean}] rebuild failed; previous index kept: {e}")
+        else:
+            mark_paper_failed(clean, str(e))
+            await message.answer(f"[{clean}] failed: {e}")
         return
 
     try:
         await asyncio.to_thread(enrich_and_save, clean)
-        await message.answer(f"[{clean}] indexed ok + enriched")
+        msg = "rebuilt ok + enriched" if was_indexed else "indexed ok + enriched"
+        await message.answer(f"[{clean}] {msg}")
     except Exception as e:
-        await message.answer(f"[{clean}] indexed ok; enrich failed: {e}")
+        msg = "rebuilt ok" if was_indexed else "indexed ok"
+        await message.answer(f"[{clean}] {msg}; enrich failed: {e}")
 
 
 

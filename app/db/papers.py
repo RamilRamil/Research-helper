@@ -15,11 +15,11 @@ def save_paper(paper: dict, topic: str, search_query: str) -> bool:
             """
             INSERT INTO papers (
                 arxiv_id, title, abstract, authors, published_at,
-                pdf_url, ingest_status, found_by_query, search_query
+                pdf_url, ingest_status, found_by_query, search_query, categories
             )
             VALUES (
                 %s, %s, %s, %s::jsonb, %s,
-                %s, 'pending', %s, %s
+                %s, 'pending', %s, %s, %s
             )
             ON CONFLICT (arxiv_id) DO NOTHING
             RETURNING id
@@ -33,16 +33,46 @@ def save_paper(paper: dict, topic: str, search_query: str) -> bool:
                 paper.get("pdf_url"),
                 topic,
                 search_query,
+                paper.get("categories") or [],
             ),
         )
-        return cur.fetchone() is not None
+        inserted = cur.fetchone() is not None
+        cats = paper.get("categories") or []
+        if not inserted and cats:
+            conn.execute(
+                """
+                UPDATE papers
+                SET categories = %s,
+                    updated_at = NOW()
+                WHERE arxiv_id = %s
+                  AND (categories IS NULL OR cardinality(categories) = 0)
+                """,
+                (cats, arxiv_id),
+            )
+        return inserted
 
 
-def update_paper_pdf(arxiv_id: str, pdf_local_path: str, page_count: int, text_chars: int) -> None:
+def update_paper_pdf(
+    arxiv_id: str,
+    pdf_local_path: str,
+    page_count: int,
+    text_chars: int,
+    *,
+    keep_indexed: bool = False,
+) -> None:
     clean_id = arxiv_id.split("v")[0]
-    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
-        conn.execute(
+    if keep_indexed:
+        sql = """
+            UPDATE papers
+            SET pdf_local_path = %s,
+                page_count = %s,
+                text_chars = %s,
+                updated_at = NOW()
+            WHERE arxiv_id = %s
+              AND ingest_status = 'indexed'
             """
+    else:
+        sql = """
             UPDATE papers
             SET pdf_local_path = %s,
                 page_count = %s,
@@ -50,8 +80,11 @@ def update_paper_pdf(arxiv_id: str, pdf_local_path: str, page_count: int, text_c
                 ingest_status = 'text_ok',
                 updated_at = NOW()
             WHERE arxiv_id = %s
-            """,
-            (pdf_local_path, page_count, text_chars, clean_id)
+            """
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.execute(
+            sql,
+            (pdf_local_path, page_count, text_chars, clean_id),
         )
 
 
@@ -130,6 +163,128 @@ def prepare_reindex(arxiv_id: str) -> str:
     return status
 
 
+def list_indexed_arxiv_ids() -> list[str]:
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        rows = conn.execute(
+            """
+            SELECT arxiv_id
+            FROM papers
+            WHERE ingest_status = 'indexed'
+            ORDER BY arxiv_id
+            """
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def list_indexed_papers(*, limit: int, offset: int) -> list[dict]:
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        rows = conn.execute(
+            """
+            SELECT arxiv_id,
+                   title,
+                   published_at,
+                   COALESCE(categories, '{}'),
+                   COALESCE(tags, '{}'),
+                   summary_en,
+                   summary_ru,
+                   pdf_url
+            FROM papers
+            WHERE ingest_status = 'indexed'
+            ORDER BY published_at DESC NULLS LAST, arxiv_id
+            LIMIT %s
+            OFFSET %s
+            """,
+            (limit, offset),
+        ).fetchall()
+    return [
+        {
+            "arxiv_id": arxiv_id,
+            "title": title,
+            "published_at": published_at.isoformat() if published_at else None,
+            "categories": list(categories),
+            "tags": list(tags),
+            "summary_en": summary_en,
+            "summary_ru": summary_ru,
+            "pdf_url": pdf_url,
+        }
+        for (
+            arxiv_id,
+            title,
+            published_at,
+            categories,
+            tags,
+            summary_en,
+            summary_ru,
+            pdf_url,
+        ) in rows
+    ]
+
+
+def get_indexed_paper(arxiv_id: str) -> dict | None:
+    clean_id = arxiv_id.split("v")[0]
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        row = conn.execute(
+            """
+            SELECT arxiv_id,
+                   title,
+                   abstract,
+                   COALESCE(authors, '[]'::jsonb),
+                   published_at,
+                   COALESCE(categories, '{}'),
+                   COALESCE(tags, '{}'),
+                   summary_en,
+                   summary_ru,
+                   pdf_url
+            FROM papers
+            WHERE arxiv_id = %s
+              AND ingest_status = 'indexed'
+            """,
+            (clean_id,),
+        ).fetchone()
+    if not row:
+        return None
+    (
+        aid,
+        title,
+        abstract,
+        authors,
+        published_at,
+        categories,
+        tags,
+        summary_en,
+        summary_ru,
+        pdf_url,
+    ) = row
+    return {
+        "arxiv_id": aid,
+        "title": title,
+        "abstract": abstract,
+        "authors": authors,
+        "published_at": published_at.isoformat() if published_at else None,
+        "categories": list(categories),
+        "tags": list(tags),
+        "summary_en": summary_en,
+        "summary_ru": summary_ru,
+        "pdf_url": pdf_url,
+    }
+
+
+def note_indexed_rebuild_error(arxiv_id: str, error: str) -> None:
+    clean_id = arxiv_id.split("v")[0]
+    safe = (error or "unknown error").replace("\x00", "")[:500]
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.execute(
+            """
+            UPDATE papers
+            SET ingest_error = %s,
+                updated_at = NOW()
+            WHERE arxiv_id = %s
+              AND ingest_status = 'indexed'
+            """,
+            (safe, clean_id),
+        )
+
+
 def get_enrichment_input(arxiv_id: str) -> dict:
     """
     Build enrich_paper_card inputs from DB.
@@ -154,9 +309,12 @@ def get_enrichment_input(arxiv_id: str) -> dict:
             SELECT text
             FROM chunks
             WHERE paper_id = %s
+              AND chunk_gen = (
+                  SELECT chunk_gen FROM papers WHERE id = %s
+              )
             ORDER BY chunk_index
             """,
-            (paper_id,),
+            (paper_id, paper_id),
         ).fetchall()
 
     texts = [r[0] for r in chunk_rows if r[0]]
@@ -196,4 +354,30 @@ def save_paper_enrichment(
             WHERE arxiv_id = %s
             """,
             (summary_en, summary_ru, tags, clean_id),
+        )
+
+
+def list_arxiv_ids_missing_categories() -> list[str]:
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        rows = conn.execute(
+            """
+            SELECT arxiv_id
+            FROM papers
+            WHERE categories IS NULL OR cardinality(categories) = 0
+            """
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def set_paper_categories(arxiv_id: str, categories: list[str]) -> None:
+    clean_id = arxiv_id.split("v")[0]
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        conn.execute(
+            """
+            UPDATE papers
+            SET categories = %s,
+                updated_at = NOW()
+            WHERE arxiv_id = %s
+            """,
+            (categories, clean_id),
         )

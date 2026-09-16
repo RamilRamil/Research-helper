@@ -1,18 +1,14 @@
 import json
-import os
 import re
-import time
 from collections import defaultdict
 
-from google import genai
 from google.genai import types
 
 from app.db.search import hybrid_search
 from app.rag.answer import generate_answer
-
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-
-GEN_MODEL = "gemini-flash-latest"
+from app.rag.crag import grade_support, rewrite_query
+from app.rag.llm import generate_content
+from app.rag.rerank import KEEP_SYNTHESIS, rerank_hits
 
 _DECOMPOSE_PROMPT = """Split the user question into 2-4 short search subquestions
 for a scientific paper library. Focus on distinct aspects to compare or survey.
@@ -66,23 +62,14 @@ def _gen_text(prompt: str, *, json_mode: bool = False) -> str:
     config_kwargs: dict = {"temperature": 0.2}
     if json_mode:
         config_kwargs["response_mime_type"] = "application/json"
-    last_err: Exception | None = None
-    for attempt in range(3):
-        try:
-            result = client.models.generate_content(
-                model=GEN_MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(**config_kwargs),
-            )
-            text = (result.text or "").strip()
-            if not text:
-                raise ValueError("empty model response")
-            return text
-        except Exception as e:
-            last_err = e
-            if attempt < 2:
-                time.sleep(2 ** attempt)
-    raise RuntimeError(f"synthesis LLM failed: {last_err}")
+    result = generate_content(
+        prompt,
+        config=types.GenerateContentConfig(**config_kwargs),
+    )
+    text = (result.text or "").strip()
+    if not text:
+        raise ValueError("empty model response")
+    return text
 
 
 def _heuristic_subquestions(question: str) -> list[str]:
@@ -145,18 +132,38 @@ def _map_paper(question: str, arxiv_id: str, hits: list[dict]) -> str:
         return f"[{arxiv_id}] {title}. Excerpts: {snips} (map LLM failed: {e})"
 
 
+def _gather_ranked(question: str, *, per_sub_limit: int = 5) -> list[dict]:
+    subs = decompose_question(question)
+    all_hits: list[dict] = []
+    for sub in subs:
+        all_hits.extend(hybrid_search(sub, limit=per_sub_limit))
+    unique: list[dict] = []
+    seen_ids: set[str] = set()
+    for h in all_hits:
+        cid = str(h.get("chunk_id") or "")
+        if not cid or cid in seen_ids:
+            continue
+        seen_ids.add(cid)
+        unique.append(h)
+    if not unique:
+        return []
+    return rerank_hits(question, unique, keep=KEEP_SYNTHESIS)
+
+
 def synthesize_answer(
     question: str, *, per_sub_limit: int = 5
 ) -> tuple[str, list[dict]]:
     """
     Returns (final_answer, hits_for_sources).
     """
-    subs = decompose_question(question)
-    all_hits: list[dict] = []
-    for sub in subs:
-        all_hits.extend(hybrid_search(sub, limit=per_sub_limit))
+    ranked = _gather_ranked(question, per_sub_limit=per_sub_limit)
+    if not ranked or not grade_support(question, ranked):
+        rewritten = rewrite_query(question)
+        ranked = _gather_ranked(rewritten, per_sub_limit=per_sub_limit)
+        if not ranked or not grade_support(question, ranked):
+            return "Indexed library cannot support this question.", []
 
-    grouped = _group_hits_by_paper(all_hits)
+    grouped = _group_hits_by_paper(ranked)
     if not grouped:
         return "No relevant context found in the indexed library.", []
 

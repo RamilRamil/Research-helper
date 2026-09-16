@@ -24,6 +24,7 @@ def search_chunks(query: str, limit: int = 5) -> list[dict]:
             JOIN papers p ON p.id = c.paper_id
             WHERE c.embedding IS NOT NULL
               AND p.ingest_status = 'indexed'
+              AND c.chunk_gen = p.chunk_gen
             ORDER BY distance
             LIMIT %s
             """,
@@ -64,6 +65,7 @@ def full_text_search(query: str, limit: int = 5) -> list[dict]:
             FROM chunks c
             JOIN papers p ON p.id = c.paper_id
             WHERE p.ingest_status = 'indexed'
+              AND c.chunk_gen = p.chunk_gen
               AND c.text_search @@ plainto_tsquery('english', %s)
             ORDER BY rank DESC
             LIMIT %s
@@ -133,3 +135,93 @@ def hybrid_search(query: str, limit: int = 5, fetch_k: int = 20) -> list[dict]:
     dense_hits = search_chunks(q, limit=fetch_k)
     fts_hits = full_text_search(q, limit=fetch_k)
     return _rrf_fuse([dense_hits, fts_hits], limit=limit)
+
+
+def search_chunks_in_papers(query: str, arxiv_ids: list[str], limit: int = 20) -> list[dict]:
+    ids = [a.split("v")[0] for a in arxiv_ids if a]
+    q = query.strip()
+    if not q or not ids:
+        return []
+    vec = embed_text(q, for_query=True)
+    with psycopg.connect(os.getenv("DATABASE_URL")) as conn:
+        rows = conn.execute(
+            """
+            SELECT id, arxiv_id, title, text, section, distance
+            FROM (
+              SELECT c.id,
+                     p.arxiv_id,
+                     p.title,
+                     c.text,
+                     c.section,
+                     c.embedding <=> %s::halfvec(3072) AS distance,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY p.arxiv_id
+                       ORDER BY c.embedding <=> %s::halfvec(3072)
+                     ) AS rn
+              FROM chunks c
+              JOIN papers p ON p.id = c.paper_id
+              WHERE c.embedding IS NOT NULL
+              AND p.ingest_status = 'indexed'
+              AND c.chunk_gen = p.chunk_gen
+              AND p.arxiv_id = ANY(%s)
+            ) ranked
+            WHERE rn <= 3
+            ORDER BY distance
+            LIMIT %s
+            """,
+            (vec, vec, ids, limit),
+        ).fetchall()
+    results = []
+    for chunk_id, arxiv_id, title, text, section, distance in rows:
+        results.append(
+            {
+                "chunk_id": str(chunk_id),
+                "arxiv_id": arxiv_id,
+                "title": title,
+                "text": text,
+                "section": section,
+                "snippet": text[:200],
+                "distance": float(distance),
+                "source": "graph",
+            }
+        )
+    return results
+
+
+def chunks_for_paper(arxiv_id: str, limit: int = 20) -> list[dict]:
+    clean = arxiv_id.split("v")[0]
+    if not clean:
+        return []
+    with psycopg.connect(os.getenv("DATABASE_URL")) as conn:
+        rows = conn.execute(
+            """
+            SELECT c.id,
+                   p.arxiv_id,
+                   p.title,
+                   c.text,
+                   c.section
+            FROM chunks c
+            JOIN papers p ON p.id = c.paper_id
+            WHERE p.arxiv_id = %s
+              AND p.ingest_status = 'indexed'
+              AND c.chunk_gen = p.chunk_gen
+              AND c.embedding IS NOT NULL
+            ORDER BY c.chunk_index
+            LIMIT %s
+            """,
+            (clean, limit),
+        ).fetchall()
+    results = []
+    for chunk_id, aid, title, text, section in rows:
+        results.append(
+            {
+                "chunk_id": str(chunk_id),
+                "arxiv_id": aid,
+                "title": title,
+                "text": text,
+                "section": section,
+                "snippet": (text or "")[:200],
+                "source": "paper",
+            }
+        )
+    return results

@@ -13,7 +13,7 @@ WHERE p.ingest_status = 'text_ok'
 -- Incomplete text_ok papers -> failed
 UPDATE papers p
 SET ingest_status = 'failed',
-    ingest_error = 'legacy incomplete ingest; run Add again',
+    ingest_error = 'legacy incomplete ingest; run /reindex',
     updated_at = NOW()
 WHERE p.ingest_status = 'text_ok'
   AND (
