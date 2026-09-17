@@ -17,7 +17,8 @@ Constitution: [`.specify/memory/constitution.md`](.specify/memory/constitution.m
 - Одна feature = один столп или узкий срез.
 - Read-only local MCP server отдаёт indexed library; MCP clients и внешние
   источники — вне scope.
-- Retrieval-native ACL — отложено (один whitelist user).
+- Retrieval-native paper ACL — отложено (shared library; Telegram roles +
+  MCP per-user credentials без фильтров по papers).
 - Eval не vibes: регрессия измерима (traces сейчас, Ragas — `012`).
 
 Не делаем: GROBID, Elasticsearch, Qdrant, fine-tune эмбеддингов, web-fallback CRAG,
@@ -43,7 +44,7 @@ entity-level GraphRAG, MCPD-чанкинг (вместо него `003` section-
 ## Specs
 
 Живой статус: [`specs/README.md`](specs/README.md). Active: `.specify/feature.json`
-(сейчас `019-telegram-roles`).
+(сейчас `020-mcp-user-tokens`, verified — next: full-paper chunks).
 
 | Spec | Столп | Статус |
 |---|---|---|
@@ -66,7 +67,8 @@ entity-level GraphRAG, MCPD-чанкинг (вместо него `003` section-
 | `017` | MCP library server | verified: read-only stdio; list/get/search |
 | `018` | MCP HTTP auth | verified: Streamable HTTP + token + rate limit |
 | `019` | Telegram roles | verified: multi-user `admin`/`reader`; legacy `ALLOWED_USER_ID`; MCP unchanged |
-| — | Per-user MCP tokens | deferred (`020+`) |
+| `020` | MCP per-user tokens | verified: DB credentials; no shared env token; dual rate limits |
+| — | MCP full-paper chunks | deferred (paging) |
 | — | OAuth / paper ACL | deferred |
 
 Hybrid + RRF не отдельная фича: было as-built до `002`. `002` — rerank поверх hybrid.
@@ -82,7 +84,8 @@ Hybrid + RRF не отдельная фича: было as-built до `002`. `00
 5. ~~`017`~~ local read-only MCP server.
 6. ~~`018`~~ MCP Streamable HTTP + shared Bearer + rate limit (TLS via reverse proxy).
 7. ~~`019`~~ Telegram multi-user roles (`admin`/`reader`).
-8. Later: per-user MCP tokens; OAuth/OIDC; paper-level ACL.
+8. ~~`020`~~ MCP per-user HTTP credentials (DB; no shared env token).
+9. Later: MCP full-paper chunks (paging); OAuth/OIDC; paper-level ACL.
 
 ## Столпы — что закрыто чем
 
@@ -92,7 +95,8 @@ Hybrid + RRF не отдельная фича: было as-built до `002`. `00
 4. **GraphRAG** — paper graph `007`/`008` + Leiden `011`. Не entity graph.
 5. **Agentic** — `005` router, не многошаговый planner с отдельными tools.
 6. **CRAG / Self-RAG** — `004`. Web не делаем.
-7. **ACL** — `019` Telegram roles (shared library). Per-user MCP / OAuth / paper ACL later.
+7. **ACL** — `019` Telegram roles + `020` MCP per-user HTTP credentials
+   (shared library). OAuth / paper ACL later.
 8. **Eval** — traces `006`; метрики Ragas — `012`.
 
 ## Схема БД
@@ -109,5 +113,6 @@ active feature.json → только её tasks.md
   → следующая feature только по «делай»
 ```
 
-Локальный MCP (`017`), token-gated HTTP (`018`) и Telegram roles (`019`) закрыты.
-Next: per-user MCP tokens / OAuth — позже.
+Локальный MCP (`017`), HTTP (`018`), Telegram roles (`019`) и per-user MCP
+tokens (`020`) закрыты.
+Next: MCP full-paper chunks (paging); OAuth / paper ACL — позже.

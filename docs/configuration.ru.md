@@ -36,10 +36,9 @@ sources:
 \* Бот fail closed, пока не задан `ALLOWED_USERS` или legacy `ALLOWED_USER_ID`.
 | `GEMINI_API_KEY` | да | Используется для query/document эмбеддингов. |
 | `OPENROUTER_API_KEY` | да | Используется для генерации DeepSeek V3.2. |
-| `MCP_TOKEN` | да для HTTP MCP | Shared bearer token для Streamable HTTP. |
 | `MCP_HTTP_HOST` | нет | По умолчанию `0.0.0.0`. |
 | `MCP_HTTP_PORT` | нет | По умолчанию `8000`. |
-| `MCP_RATE_LIMIT_PER_MIN` | нет | По умолчанию `60` запросов на IP в минуту. |
+| `MCP_RATE_LIMIT_PER_MIN` | нет | По умолчанию `60` запросов в минуту (по IP до auth, по credential после). |
 | `MCP_RESOURCE_URL` | нет | Публичный URL MCP resource для auth metadata. |
 | `DATABASE_URL` | да | Postgres DSN. Локальный дефолт — `localhost:5433`; Compose переопределяет на внутренний `db:5432`. |
 | `PAPERS_DIR` | нет | Каталог хранения PDF; по умолчанию `data/papers`. |
@@ -81,17 +80,32 @@ Write-tools нет.
 docker compose run --rm -T app python -m app.mcp_server
 ```
 
-### Streamable HTTP (token + rate limit)
+### Streamable HTTP (DB credentials + rate limit)
 
-Задай `MCP_TOKEN` в `.env`, затем:
+Сначала схема и mint:
+
+```bash
+psql "$DATABASE_URL" -f scripts/mcp_tokens.sql
+python -m app.mcp_tokens create --label alice --role reader
+```
+
+Затем:
 
 ```bash
 docker compose up -d --build mcp
 ```
 
 Endpoint: `http://127.0.0.1:8000/mcp`  
-Auth: `Authorization: Bearer <MCP_TOKEN>`  
-Rate limit: `MCP_RATE_LIMIT_PER_MIN` (по умолчанию 60/мин на IP).
+Auth: `Authorization: Bearer <token_from_mint>` (per-client DB credential; бывший
+`MCP_TOKEN` из env не используется)  
+Rate limit: `MCP_RATE_LIMIT_PER_MIN` (по умолчанию 60/мин; ключ IP до identity,
+ключ credential после verify).
+
+Revoke:
+
+```bash
+python -m app.mcp_tokens revoke --label alice
+```
 
 Для публичного интернета поставь TLS перед сервисом. Само приложение
 отдаёт cleartext HTTP.

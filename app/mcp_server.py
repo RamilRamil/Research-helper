@@ -1,11 +1,9 @@
 import argparse
 import os
-import secrets
 import time
 from collections import defaultdict, deque
 from typing import Any
 
-import uvicorn
 from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
@@ -15,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from app.db.mcp_tokens import lookup_active_by_raw, touch_last_used
 from app.db.papers import get_indexed_paper, list_indexed_papers
 
 DEFAULT_RATE_LIMIT_PER_MIN = 60
@@ -22,17 +21,24 @@ DEFAULT_HTTP_HOST = "0.0.0.0"
 DEFAULT_HTTP_PORT = 8000
 
 
-class SharedTokenVerifier(TokenVerifier):
-    def __init__(self, token: str) -> None:
-        self._token = token
-
+class DbTokenVerifier(TokenVerifier):
     async def verify_token(self, token: str) -> AccessToken | None:
-        if not token or not secrets.compare_digest(token, self._token):
+        if not token:
             return None
+        try:
+            cred = lookup_active_by_raw(token)
+        except Exception:
+            return None
+        if cred is None:
+            return None
+        try:
+            touch_last_used(cred.id)
+        except Exception:
+            pass
         return AccessToken(
             token=token,
-            client_id="shared",
-            scopes=["library:read"],
+            client_id=cred.label,
+            scopes=["library:read", f"role:{cred.role}"],
         )
 
 
@@ -42,10 +48,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._limit = limit_per_min
         self._hits: dict[str, deque[float]] = defaultdict(deque)
 
+    def _key(self, request: Request) -> str:
+        host = request.client.host if request.client else "unknown"
+        auth = request.headers.get("authorization") or ""
+        if not auth.lower().startswith("bearer "):
+            return f"ip:{host}"
+        raw = auth.split(" ", 1)[1].strip()
+        if not raw:
+            return f"ip:{host}"
+        try:
+            cred = lookup_active_by_raw(raw)
+        except Exception:
+            return f"ip:{host}"
+        if cred is None:
+            return f"ip:{host}"
+        return f"token:{cred.id}"
+
     async def dispatch(self, request: Request, call_next):
-        client = request.client.host if request.client else "unknown"
+        key = self._key(request)
         now = time.monotonic()
-        window = self._hits[client]
+        window = self._hits[key]
         while window and now - window[0] >= 60.0:
             window.popleft()
         if len(window) >= self._limit:
@@ -147,15 +169,12 @@ def build_server(*, http_auth: bool = False) -> MCPServer:
         "version": "1.0.0",
     }
     if http_auth:
-        token = (os.environ.get("MCP_TOKEN") or "").strip()
-        if not token:
-            raise RuntimeError("MCP_TOKEN required for HTTP mode")
         host = (os.environ.get("MCP_HTTP_HOST") or DEFAULT_HTTP_HOST).strip()
         port = int(os.environ.get("MCP_HTTP_PORT") or DEFAULT_HTTP_PORT)
         resource = (
             os.environ.get("MCP_RESOURCE_URL") or f"http://{host}:{port}/mcp"
         ).strip()
-        kwargs["token_verifier"] = SharedTokenVerifier(token)
+        kwargs["token_verifier"] = DbTokenVerifier()
         kwargs["auth"] = AuthSettings(
             issuer_url=AnyHttpUrl("https://local.token/"),
             resource_server_url=AnyHttpUrl(resource),
@@ -182,6 +201,8 @@ def _rate_limit() -> int:
 
 
 def run_http() -> None:
+    import uvicorn
+
     host = (os.environ.get("MCP_HTTP_HOST") or DEFAULT_HTTP_HOST).strip()
     port = int(os.environ.get("MCP_HTTP_PORT") or DEFAULT_HTTP_PORT)
     mcp = build_server(http_auth=True)
@@ -195,7 +216,7 @@ def main() -> None:
     parser.add_argument(
         "--http",
         action="store_true",
-        help="Serve Streamable HTTP with bearer token auth",
+        help="Serve Streamable HTTP with DB bearer credentials",
     )
     args = parser.parse_args()
     if args.http:

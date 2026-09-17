@@ -95,8 +95,8 @@ flowchart TB
 - **`app/db/`** — хранение: lifecycle статей ([papers.py](../app/db/papers.py)), запись + эмбеддинг
   чанков ([chunks.py](../app/db/chunks.py)) и поиск ([search.py](../app/db/search.py)).
 - **`app/mcp_server.py`** — read-only MCP tools (`list_papers`, `get_paper`,
-  `search`): stdio по умолчанию, Streamable HTTP с Bearer и rate limit через
-  `--http` / Compose-сервис `mcp`.
+  `search`): stdio по умолчанию; Streamable HTTP с per-client DB Bearer и
+  dual rate limit через `--http` / Compose-сервис `mcp`.
 
 ## Поток данных
 
@@ -133,7 +133,8 @@ pgvector (`papers`, `chunks`) · локальные PDF · hybrid dense+FTS retr
 - **Нет Groq** — «роутер» это regex, не LLM-вызов; единственная внешняя модель — Gemini.
 - **Нет таблиц `research_sessions` / `chunk_feedback`, нет JSONL-backup** — существуют только
   `papers` и `chunks`.
-- **Нет MCP OAuth / per-user ACL** — на HTTP только shared Bearer; stdio локальный.
+- **Нет MCP OAuth / paper ACL** — HTTP на per-client DB credentials; stdio —
+  local host trust.
 
 Когда проводка меняется — обнови этот док и добавь запись в `log.md`. Диаграмма, которая врёт про
 то, что связано, хуже, чем её отсутствие.

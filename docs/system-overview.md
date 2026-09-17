@@ -93,8 +93,8 @@ flowchart TB
 - **`app/db/`** — persistence: paper lifecycle ([papers.py](../app/db/papers.py)), chunk write +
   embed ([chunks.py](../app/db/chunks.py)), and retrieval ([search.py](../app/db/search.py)).
 - **`app/mcp_server.py`** — read-only MCP tools (`list_papers`, `get_paper`,
-  `search`): stdio by default, Streamable HTTP with Bearer token + rate limit
-  via `--http` / Compose service `mcp`.
+  `search`): stdio by default; Streamable HTTP with per-client DB Bearer
+  credentials + dual rate limit via `--http` / Compose service `mcp`.
 
 ## Data flow
 
@@ -131,7 +131,8 @@ plan diagrams):
 - **No Groq** — the "router" is a regex, not an LLM call; the only external model is Gemini.
 - **No `research_sessions` / `chunk_feedback` tables, no JSONL backup** — only `papers` and
   `chunks` exist.
-- **No MCP OAuth / per-user ACL** — shared Bearer token only on HTTP; stdio is local.
+- **No MCP OAuth / paper ACL** — HTTP uses per-client DB credentials; stdio is
+  local host trust.
 
 When the wiring changes, update this doc and add a `log.md` entry — a diagram that lies about what
 is connected is worse than no diagram.

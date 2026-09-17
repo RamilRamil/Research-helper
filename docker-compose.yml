@@ -37,7 +37,6 @@ services:
       DATABASE_URL: postgresql://research:research@db:5432/research
       MCP_HTTP_HOST: 0.0.0.0
       MCP_HTTP_PORT: "8000"
-      MCP_TOKEN: ${MCP_TOKEN}
       MCP_RATE_LIMIT_PER_MIN: ${MCP_RATE_LIMIT_PER_MIN:-60}
       MCP_RESOURCE_URL: ${MCP_RESOURCE_URL:-http://127.0.0.1:8000/mcp}
     command: ["python", "-m", "app.mcp_server", "--http"]

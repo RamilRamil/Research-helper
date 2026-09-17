@@ -36,10 +36,9 @@ How the bot is configured and run. Loaded from `.env` via `python-dotenv`.
 \* Bot fails closed unless `ALLOWED_USERS` or legacy `ALLOWED_USER_ID` is set.
 | `GEMINI_API_KEY` | yes | Used for query and document embeddings. |
 | `OPENROUTER_API_KEY` | yes | Used for DeepSeek V3.2 generation. |
-| `MCP_TOKEN` | yes for HTTP MCP | Shared bearer token for Streamable HTTP. |
 | `MCP_HTTP_HOST` | no | Default `0.0.0.0`. |
 | `MCP_HTTP_PORT` | no | Default `8000`. |
-| `MCP_RATE_LIMIT_PER_MIN` | no | Default `60` requests per client IP per minute. |
+| `MCP_RATE_LIMIT_PER_MIN` | no | Default `60` requests per minute (per IP before auth, per credential after). |
 | `MCP_RESOURCE_URL` | no | Public MCP resource URL for auth metadata. |
 | `DATABASE_URL` | yes | Postgres DSN. Local default targets `localhost:5433`; Compose overrides it to the internal `db:5432`. |
 | `PAPERS_DIR` | no | PDF storage dir; defaults to `data/papers`. |
@@ -79,17 +78,32 @@ No write tools.
 docker compose run --rm -T app python -m app.mcp_server
 ```
 
-### Streamable HTTP (token + rate limit)
+### Streamable HTTP (DB credentials + rate limit)
 
-Set `MCP_TOKEN` in `.env`, then:
+Apply schema and mint a credential first:
+
+```bash
+psql "$DATABASE_URL" -f scripts/mcp_tokens.sql
+python -m app.mcp_tokens create --label alice --role reader
+```
+
+Then:
 
 ```bash
 docker compose up -d --build mcp
 ```
 
 Endpoint: `http://127.0.0.1:8000/mcp`  
-Auth: `Authorization: Bearer <MCP_TOKEN>`  
-Rate limit: `MCP_RATE_LIMIT_PER_MIN` (default 60/min per client IP).
+Auth: `Authorization: Bearer <token_from_mint>` (per-client DB credential; former
+`MCP_TOKEN` env secret is not used)  
+Rate limit: `MCP_RATE_LIMIT_PER_MIN` (default 60/min; IP key before identity,
+credential key after verify).
+
+Revoke:
+
+```bash
+python -m app.mcp_tokens revoke --label alice
+```
 
 Put TLS in front of this service for public internet. The app itself serves
 cleartext HTTP.
