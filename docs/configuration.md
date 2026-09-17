@@ -69,7 +69,8 @@ Dependencies ([requirements.txt](../requirements.txt)): `python-dotenv`, `psycop
 
 ## Local MCP server
 
-The read-only MCP server exposes `list_papers`, `get_paper`, and `search`.
+The read-only MCP server exposes `list_papers`, `get_paper`, `get_paper_chunks`,
+and `search`.
 No write tools.
 
 ### Stdio
@@ -104,6 +105,9 @@ Revoke:
 ```bash
 python -m app.mcp_tokens revoke --label alice
 ```
+
+`get_paper_chunks` pages live indexed body text (`limit` default 20, max 50;
+`offset` from 0). Repeat until `offset + returned >= total`.
 
 Put TLS in front of this service for public internet. The app itself serves
 cleartext HTTP.

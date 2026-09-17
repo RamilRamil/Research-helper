@@ -93,8 +93,9 @@ flowchart TB
 - **`app/db/`** — persistence: paper lifecycle ([papers.py](../app/db/papers.py)), chunk write +
   embed ([chunks.py](../app/db/chunks.py)), and retrieval ([search.py](../app/db/search.py)).
 - **`app/mcp_server.py`** — read-only MCP tools (`list_papers`, `get_paper`,
-  `search`): stdio by default; Streamable HTTP with per-client DB Bearer
-  credentials + dual rate limit via `--http` / Compose service `mcp`.
+  `get_paper_chunks`, `search`): stdio by default; Streamable HTTP with
+  per-client DB Bearer credentials + dual rate limit via `--http` / Compose
+  service `mcp`.
 
 ## Data flow
 

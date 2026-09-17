@@ -269,6 +269,70 @@ def get_indexed_paper(arxiv_id: str) -> dict | None:
     }
 
 
+def list_indexed_paper_chunks(
+    arxiv_id: str,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> dict | None:
+    """Return a page of live-generation chunks for an indexed paper.
+
+    Returns None if the paper is missing or not indexed.
+    """
+    clean_id = arxiv_id.split("v")[0]
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        paper = conn.execute(
+            """
+            SELECT id, title, chunk_gen
+            FROM papers
+            WHERE arxiv_id = %s
+              AND ingest_status = 'indexed'
+            """,
+            (clean_id,),
+        ).fetchone()
+        if paper is None:
+            return None
+        paper_id, title, chunk_gen = paper
+        total_row = conn.execute(
+            """
+            SELECT count(*)
+            FROM chunks
+            WHERE paper_id = %s
+              AND chunk_gen = %s
+            """,
+            (paper_id, chunk_gen),
+        ).fetchone()
+        total = int(total_row[0]) if total_row else 0
+        rows = conn.execute(
+            """
+            SELECT chunk_index, section, text
+            FROM chunks
+            WHERE paper_id = %s
+              AND chunk_gen = %s
+            ORDER BY chunk_index
+            LIMIT %s OFFSET %s
+            """,
+            (paper_id, chunk_gen, limit, offset),
+        ).fetchall()
+    chunks = [
+        {
+            "chunk_index": int(chunk_index),
+            "section": section,
+            "text": text or "",
+        }
+        for chunk_index, section, text in rows
+    ]
+    return {
+        "arxiv_id": clean_id,
+        "title": title,
+        "chunks": chunks,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "returned": len(chunks),
+    }
+
+
 def note_indexed_rebuild_error(arxiv_id: str, error: str) -> None:
     clean_id = arxiv_id.split("v")[0]
     safe = (error or "unknown error").replace("\x00", "")[:500]

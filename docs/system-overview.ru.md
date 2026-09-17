@@ -95,8 +95,8 @@ flowchart TB
 - **`app/db/`** — хранение: lifecycle статей ([papers.py](../app/db/papers.py)), запись + эмбеддинг
   чанков ([chunks.py](../app/db/chunks.py)) и поиск ([search.py](../app/db/search.py)).
 - **`app/mcp_server.py`** — read-only MCP tools (`list_papers`, `get_paper`,
-  `search`): stdio по умолчанию; Streamable HTTP с per-client DB Bearer и
-  dual rate limit через `--http` / Compose-сервис `mcp`.
+  `get_paper_chunks`, `search`): stdio по умолчанию; Streamable HTTP с
+  per-client DB Bearer и dual rate limit через `--http` / Compose-сервис `mcp`.
 
 ## Поток данных
 

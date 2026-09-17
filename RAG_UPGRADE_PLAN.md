@@ -44,7 +44,7 @@ entity-level GraphRAG, MCPD-чанкинг (вместо него `003` section-
 ## Specs
 
 Живой статус: [`specs/README.md`](specs/README.md). Active: `.specify/feature.json`
-(сейчас `020-mcp-user-tokens`, verified — next: full-paper chunks).
+(сейчас `024-mcp-paper-chunks`, verified).
 
 | Spec | Столп | Статус |
 |---|---|---|
@@ -68,7 +68,7 @@ entity-level GraphRAG, MCPD-чанкинг (вместо него `003` section-
 | `018` | MCP HTTP auth | verified: Streamable HTTP + token + rate limit |
 | `019` | Telegram roles | verified: multi-user `admin`/`reader`; legacy `ALLOWED_USER_ID`; MCP unchanged |
 | `020` | MCP per-user tokens | verified: DB credentials; no shared env token; dual rate limits |
-| — | MCP full-paper chunks | deferred (paging) |
+| `024` | MCP paper chunks | verified: `get_paper_chunks` paging |
 | — | OAuth / paper ACL | deferred |
 
 Hybrid + RRF не отдельная фича: было as-built до `002`. `002` — rerank поверх hybrid.
@@ -85,7 +85,8 @@ Hybrid + RRF не отдельная фича: было as-built до `002`. `00
 6. ~~`018`~~ MCP Streamable HTTP + shared Bearer + rate limit (TLS via reverse proxy).
 7. ~~`019`~~ Telegram multi-user roles (`admin`/`reader`).
 8. ~~`020`~~ MCP per-user HTTP credentials (DB; no shared env token).
-9. Later: MCP full-paper chunks (paging); OAuth/OIDC; paper-level ACL.
+9. ~~`024`~~ MCP `get_paper_chunks` (paged full-paper text).
+10. Later: OAuth/OIDC; paper-level ACL.
 
 ## Столпы — что закрыто чем
 
@@ -113,6 +114,6 @@ active feature.json → только её tasks.md
   → следующая feature только по «делай»
 ```
 
-Локальный MCP (`017`), HTTP (`018`), Telegram roles (`019`) и per-user MCP
-tokens (`020`) закрыты.
-Next: MCP full-paper chunks (paging); OAuth / paper ACL — позже.
+Локальный MCP (`017`), HTTP (`018`/`020`), Telegram roles (`019`) и
+`get_paper_chunks` (`024`) закрыты.
+Next: OAuth / paper ACL — позже.

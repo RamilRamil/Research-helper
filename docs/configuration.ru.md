@@ -71,7 +71,8 @@ python -m app.bot.main        # запустить бота против лок�
 
 ## Локальный MCP server
 
-Read-only MCP server отдаёт `list_papers`, `get_paper` и `search`.
+Read-only MCP server отдаёт `list_papers`, `get_paper`, `get_paper_chunks` и
+`search`.
 Write-tools нет.
 
 ### Stdio
@@ -106,6 +107,9 @@ Revoke:
 ```bash
 python -m app.mcp_tokens revoke --label alice
 ```
+
+`get_paper_chunks` листает live indexed body (`limit` по умолчанию 20, max 50;
+`offset` с 0). Повторять, пока `offset + returned >= total`.
 
 Для публичного интернета поставь TLS перед сервисом. Само приложение
 отдаёт cleartext HTTP.

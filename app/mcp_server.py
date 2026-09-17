@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.db.mcp_tokens import lookup_active_by_raw, touch_last_used
-from app.db.papers import get_indexed_paper, list_indexed_papers
+from app.db.papers import get_indexed_paper, list_indexed_paper_chunks, list_indexed_papers
 
 DEFAULT_RATE_LIMIT_PER_MIN = 60
 DEFAULT_HTTP_HOST = "0.0.0.0"
@@ -118,6 +118,30 @@ def _register_tools(mcp: MCPServer) -> None:
         return paper
 
     @mcp.tool(structured_output=True)
+    def get_paper_chunks(
+        arxiv_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Page through live indexed body chunks for one paper (full text)."""
+        clean_id = (arxiv_id or "").strip()
+        if not clean_id or len(clean_id) > 40:
+            raise ToolError("arxiv_id must be a non-empty arXiv identifier")
+        safe_limit = _bounded(limit, name="limit", minimum=1, maximum=50)
+        safe_offset = _bounded(offset, name="offset", minimum=0, maximum=100000)
+        try:
+            page = list_indexed_paper_chunks(
+                clean_id,
+                limit=safe_limit,
+                offset=safe_offset,
+            )
+        except Exception as exc:
+            raise ToolError("Indexed paper chunks are unavailable") from exc
+        if page is None:
+            raise ToolError(f"Indexed paper not found: {clean_id}")
+        return page
+
+    @mcp.tool(structured_output=True)
     def search(query: str, limit: int = 5) -> dict[str, Any]:
         """Search indexed passages with the existing hybrid retrieval pipeline."""
         clean_query = (query or "").strip()
@@ -163,8 +187,9 @@ def build_server(*, http_auth: bool = False) -> MCPServer:
         "name": "research-library",
         "description": "Read-only access to the indexed arXiv paper library.",
         "instructions": (
-            "Use search for evidence passages, get_paper for one indexed paper, "
-            "and list_papers for discovery. This server never writes data."
+            "Use search for evidence passages, get_paper for metadata/summaries, "
+            "get_paper_chunks to page through the indexed body text, and "
+            "list_papers for discovery. This server never writes data."
         ),
         "version": "1.0.0",
     }
