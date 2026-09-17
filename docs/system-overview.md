@@ -92,10 +92,11 @@ flowchart TB
   question routing, and card enrichment.
 - **`app/db/`** — persistence: paper lifecycle ([papers.py](../app/db/papers.py)), chunk write +
   embed ([chunks.py](../app/db/chunks.py)), and retrieval ([search.py](../app/db/search.py)).
-- **`app/mcp_server.py`** — read-only MCP tools (`list_papers`, `get_paper`,
-  `get_paper_chunks`, `search`): stdio by default; Streamable HTTP with
-  per-client DB Bearer credentials + dual rate limit via `--http` / Compose
-  service `mcp`.
+- **`app/mcp_server.py`** — MCP tools (`list_papers`, `get_paper`,
+  `get_paper_chunks`, `search`, plus admin `request_topic_ingest` /
+  `get_topic_ingest_job`): stdio by default; Streamable HTTP with per-client
+  DB Bearer + dual rate limit via `--http` / Compose `mcp`. Worker:
+  `app/mcp_topic_worker.py` / Compose `mcp_worker`.
 
 ## Data flow
 

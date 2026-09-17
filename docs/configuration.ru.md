@@ -48,7 +48,7 @@ sources:
 
 ## Docker Compose
 
-[docker-compose.yml](../docker-compose.yml) определяет два сервиса:
+[docker-compose.yml](../docker-compose.yml) определяет сервисы:
 
 - **`db`** — `pgvector/pgvector:pg16`, база/пользователь/пароль все `research`, опубликован на
   хост-порту **5433** → контейнерный 5432, с healthcheck `pg_isready` и именованным томом
@@ -57,6 +57,8 @@ sources:
   переопределённым на `postgresql://research:research@db:5432/research`. Стартует только после того,
   как `db` healthy, `restart: unless-stopped`, монтирует `./data/papers`, чтобы PDF сохранялись на
   хосте.
+- **`mcp`** — Streamable HTTP MCP на порту 8000.
+- **`mcp_worker`** — drain `mcp_topic_jobs` (search + ingest); без published ports.
 
 ## Локальная разработка
 
@@ -71,9 +73,10 @@ python -m app.bot.main        # запустить бота против лок�
 
 ## Локальный MCP server
 
-Read-only MCP server отдаёт `list_papers`, `get_paper`, `get_paper_chunks` и
-`search`.
-Write-tools нет.
+Playbook для агента на этой машине (Docker): [mcp-agent-connect.ru.md](mcp-agent-connect.ru.md).
+
+Read-only MCP tools: `list_papers`, `get_paper`, `get_paper_chunks`, `search`.
+Admin HTTP additionally: `request_topic_ingest`, `get_topic_ingest_job`.
 
 ### Stdio
 
@@ -110,6 +113,21 @@ python -m app.mcp_tokens revoke --label alice
 
 `get_paper_chunks` листает live indexed body (`limit` по умолчанию 20, max 50;
 `offset` с 0). Повторять, пока `offset + returned >= total`.
+
+### Topic ingest (admin HTTP)
+
+```bash
+docker compose exec -T db psql -U research -d research < scripts/mcp_topic_jobs.sql
+docker compose run --rm -T app python -m app.mcp_tokens create --label agent-admin --role admin
+docker compose up -d --build mcp mcp_worker
+```
+
+Tools (Bearer **admin** для enqueue):
+
+- `request_topic_ingest(topic)` → `{job_id, status, topic}`
+- `get_topic_ingest_job(job_id)` → статус + counts (только creator)
+
+Poll до `succeeded` / `failed`. Stdio enqueue не умеет.
 
 Для публичного интернета поставь TLS перед сервисом. Само приложение
 отдаёт cleartext HTTP.

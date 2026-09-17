@@ -44,7 +44,7 @@ entity-level GraphRAG, MCPD-чанкинг (вместо него `003` section-
 ## Specs
 
 Живой статус: [`specs/README.md`](specs/README.md). Active: `.specify/feature.json`
-(сейчас `024-mcp-paper-chunks`, verified).
+(сейчас `025-mcp-topic-ingest`, verified).
 
 | Spec | Столп | Статус |
 |---|---|---|
@@ -69,6 +69,7 @@ entity-level GraphRAG, MCPD-чанкинг (вместо него `003` section-
 | `019` | Telegram roles | verified: multi-user `admin`/`reader`; legacy `ALLOWED_USER_ID`; MCP unchanged |
 | `020` | MCP per-user tokens | verified: DB credentials; no shared env token; dual rate limits |
 | `024` | MCP paper chunks | verified: `get_paper_chunks` paging |
+| `025` | MCP topic ingest jobs | verified: admin enqueue + poll; async search/index worker |
 | — | OAuth / paper ACL | deferred |
 
 Hybrid + RRF не отдельная фича: было as-built до `002`. `002` — rerank поверх hybrid.
@@ -86,7 +87,8 @@ Hybrid + RRF не отдельная фича: было as-built до `002`. `00
 7. ~~`019`~~ Telegram multi-user roles (`admin`/`reader`).
 8. ~~`020`~~ MCP per-user HTTP credentials (DB; no shared env token).
 9. ~~`024`~~ MCP `get_paper_chunks` (paged full-paper text).
-10. Later: OAuth/OIDC; paper-level ACL.
+10. ~~`025`~~ MCP admin topic ingest jobs (async + poll).
+11. Later: OAuth/OIDC; paper-level ACL.
 
 ## Столпы — что закрыто чем
 
@@ -116,4 +118,5 @@ active feature.json → только её tasks.md
 
 Локальный MCP (`017`), HTTP (`018`/`020`), Telegram roles (`019`) и
 `get_paper_chunks` (`024`) закрыты.
+Локальный MCP (`017`/`020`/`024`), HTTP + topic ingest jobs (`025`) закрыты.
 Next: OAuth / paper ACL — позже.

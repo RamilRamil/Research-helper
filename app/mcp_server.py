@@ -1,4 +1,5 @@
 import argparse
+import contextvars
 import os
 import time
 from collections import defaultdict, deque
@@ -13,12 +14,55 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from app.db.mcp_tokens import lookup_active_by_raw, touch_last_used
+from app.db.mcp_tokens import ROLE_ADMIN, McpCredential, lookup_active_by_raw, touch_last_used
+from app.db.mcp_topic_jobs import (
+    enqueue,
+    get_job,
+    job_to_public_dict,
+    normalize_topic,
+)
 from app.db.papers import get_indexed_paper, list_indexed_paper_chunks, list_indexed_papers
 
 DEFAULT_RATE_LIMIT_PER_MIN = 60
 DEFAULT_HTTP_HOST = "0.0.0.0"
 DEFAULT_HTTP_PORT = 8000
+
+_current_cred: contextvars.ContextVar[McpCredential | None] = contextvars.ContextVar(
+    "mcp_current_cred",
+    default=None,
+)
+
+
+def _set_cred_from_auth_header(authorization: str | None) -> None:
+    _current_cred.set(None)
+    auth = authorization or ""
+    if not auth.lower().startswith("bearer "):
+        return
+    raw = auth.split(" ", 1)[1].strip()
+    if not raw:
+        return
+    try:
+        cred = lookup_active_by_raw(raw)
+    except Exception:
+        return
+    if cred is not None:
+        _current_cred.set(cred)
+
+
+def _require_http_admin() -> McpCredential:
+    cred = _current_cred.get()
+    if cred is None:
+        raise ToolError("admin HTTP credential required")
+    if cred.role != ROLE_ADMIN:
+        raise ToolError("admin role required")
+    return cred
+
+
+def _require_http_cred() -> McpCredential:
+    cred = _current_cred.get()
+    if cred is None:
+        raise ToolError("HTTP credential required")
+    return cred
 
 
 class DbTokenVerifier(TokenVerifier):
@@ -35,11 +79,26 @@ class DbTokenVerifier(TokenVerifier):
             touch_last_used(cred.id)
         except Exception:
             pass
+        _current_cred.set(cred)
         return AccessToken(
             token=token,
             client_id=cred.label,
-            scopes=["library:read", f"role:{cred.role}"],
+            scopes=[
+                "library:read",
+                f"role:{cred.role}",
+                f"cred_id:{cred.id}",
+            ],
         )
+
+
+class CredContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        token = _current_cred.set(None)
+        try:
+            _set_cred_from_auth_header(request.headers.get("authorization"))
+            return await call_next(request)
+        finally:
+            _current_cred.reset(token)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -181,17 +240,52 @@ def _register_tools(mcp: MCPServer) -> None:
             "returned": len(passages),
         }
 
+    @mcp.tool(structured_output=True)
+    def request_topic_ingest(topic: str) -> dict[str, Any]:
+        """Enqueue async topic search+ingest (admin HTTP only). Returns job_id."""
+        cred = _require_http_admin()
+        try:
+            clean = normalize_topic(topic)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from exc
+        try:
+            job = enqueue(clean, cred.id)
+        except Exception as exc:
+            raise ToolError("Failed to enqueue topic ingest job") from exc
+        return {
+            "job_id": job.id,
+            "status": job.status,
+            "topic": job.topic,
+        }
+
+    @mcp.tool(structured_output=True)
+    def get_topic_ingest_job(job_id: int) -> dict[str, Any]:
+        """Poll a topic ingest job created by this admin credential."""
+        cred = _require_http_cred()
+        if job_id < 1:
+            raise ToolError("job_id must be a positive integer")
+        try:
+            job = get_job(job_id)
+        except Exception as exc:
+            raise ToolError("Failed to load topic ingest job") from exc
+        if job is None:
+            raise ToolError(f"Job not found: {job_id}")
+        if job.creator_credential_id != cred.id:
+            raise ToolError(f"Job not found: {job_id}")
+        return job_to_public_dict(job)
+
 
 def build_server(*, http_auth: bool = False) -> MCPServer:
     kwargs: dict[str, Any] = {
         "name": "research-library",
-        "description": "Read-only access to the indexed arXiv paper library.",
+        "description": "Read-only library access plus admin topic ingest jobs.",
         "instructions": (
             "Use search for evidence passages, get_paper for metadata/summaries, "
-            "get_paper_chunks to page through the indexed body text, and "
-            "list_papers for discovery. This server never writes data."
+            "get_paper_chunks to page body text, and list_papers for discovery. "
+            "Admins may request_topic_ingest and poll get_topic_ingest_job. "
+            "Readers cannot enqueue ingest."
         ),
-        "version": "1.0.0",
+        "version": "1.1.0",
     }
     if http_auth:
         host = (os.environ.get("MCP_HTTP_HOST") or DEFAULT_HTTP_HOST).strip()
@@ -232,7 +326,9 @@ def run_http() -> None:
     port = int(os.environ.get("MCP_HTTP_PORT") or DEFAULT_HTTP_PORT)
     mcp = build_server(http_auth=True)
     app = mcp.streamable_http_app(host=host)
+    # Cred context outermost so tools see Bearer identity.
     app.add_middleware(RateLimitMiddleware, limit_per_min=_rate_limit())
+    app.add_middleware(CredContextMiddleware)
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 

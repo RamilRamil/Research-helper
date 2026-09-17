@@ -48,13 +48,15 @@ Never commit `.env` — it is gitignored.
 
 ## Docker Compose
 
-[docker-compose.yml](../docker-compose.yml) defines two services:
+[docker-compose.yml](../docker-compose.yml) defines services:
 
 - **`db`** — `pgvector/pgvector:pg16`, database/user/password all `research`, published on host
   port **5433** → container 5432, with a `pg_isready` healthcheck and a `pgdata` named volume.
 - **`app`** — built from the [Dockerfile](../Dockerfile), `env_file: .env`, with `DATABASE_URL`
   overridden to `postgresql://research:research@db:5432/research`. Starts only after `db` is
   healthy, `restart: unless-stopped`, and mounts `./data/papers` so PDFs persist on the host.
+- **`mcp`** — Streamable HTTP MCP (`python -m app.mcp_server --http`) on port 8000.
+- **`mcp_worker`** — drains `mcp_topic_jobs` (search + ingest); no published ports.
 
 ## Local development
 
@@ -69,9 +71,11 @@ Dependencies ([requirements.txt](../requirements.txt)): `python-dotenv`, `psycop
 
 ## Local MCP server
 
+Agent playbook (same machine + Docker): [mcp-agent-connect.md](mcp-agent-connect.md).
+
 The read-only MCP server exposes `list_papers`, `get_paper`, `get_paper_chunks`,
-and `search`.
-No write tools.
+and `search`. Admin HTTP also exposes `request_topic_ingest` and
+`get_topic_ingest_job`.
 
 ### Stdio
 
@@ -108,6 +112,24 @@ python -m app.mcp_tokens revoke --label alice
 
 `get_paper_chunks` pages live indexed body text (`limit` default 20, max 50;
 `offset` from 0). Repeat until `offset + returned >= total`.
+
+### Topic ingest (admin HTTP)
+
+Compose worker drains durable jobs:
+
+```bash
+docker compose exec -T db psql -U research -d research < scripts/mcp_topic_jobs.sql
+docker compose run --rm -T app python -m app.mcp_tokens create --label agent-admin --role admin
+docker compose up -d --build mcp mcp_worker
+```
+
+MCP tools (Bearer **admin** only for enqueue):
+
+- `request_topic_ingest(topic)` → `{job_id, status, topic}`
+- `get_topic_ingest_job(job_id)` → status + counts (creator-only)
+
+Poll until `status` is `succeeded` or `failed`. Stdio cannot enqueue (no
+credential identity).
 
 Put TLS in front of this service for public internet. The app itself serves
 cleartext HTTP.

@@ -49,5 +49,19 @@ services:
     volumes:
       - ./data/papers:/app/data/papers
 
+  mcp_worker:
+    build: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://research:research@db:5432/research
+    command: ["python", "-m", "app.mcp_topic_worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./data/papers:/app/data/papers
+
 volumes:
   pgdata:

@@ -94,9 +94,11 @@ flowchart TB
   роутинг вопросов и обогащение карточек.
 - **`app/db/`** — хранение: lifecycle статей ([papers.py](../app/db/papers.py)), запись + эмбеддинг
   чанков ([chunks.py](../app/db/chunks.py)) и поиск ([search.py](../app/db/search.py)).
-- **`app/mcp_server.py`** — read-only MCP tools (`list_papers`, `get_paper`,
-  `get_paper_chunks`, `search`): stdio по умолчанию; Streamable HTTP с
-  per-client DB Bearer и dual rate limit через `--http` / Compose-сервис `mcp`.
+- **`app/mcp_server.py`** — MCP tools (`list_papers`, `get_paper`,
+  `get_paper_chunks`, `search`, admin `request_topic_ingest` /
+  `get_topic_ingest_job`): stdio по умолчанию; Streamable HTTP с per-client DB
+  Bearer и dual rate limit через `--http` / Compose `mcp`. Worker:
+  `app/mcp_topic_worker.py` / Compose `mcp_worker`.
 
 ## Поток данных
 

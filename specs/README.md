@@ -28,4 +28,5 @@ Active feature is in `.specify/feature.json`.
 | [019-telegram-roles](./019-telegram-roles/) | Verified. Multi Telegram allowlist `admin`/`reader`; legacy `ALLOWED_USER_ID`; MCP token unchanged. |
 | [020-mcp-user-tokens](./020-mcp-user-tokens/) | Verified. Per-user MCP HTTP credentials in DB; no shared env token; dual rate limits; stdio host trust. |
 | [024-mcp-paper-chunks](./024-mcp-paper-chunks/) | Verified. `get_paper_chunks` pages live indexed body text. |
+| [025-mcp-topic-ingest](./025-mcp-topic-ingest/) | Verified. Admin MCP async topic ingest jobs + poll status; Compose `mcp_worker`. |
 
